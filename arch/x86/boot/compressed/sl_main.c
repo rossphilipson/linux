@@ -61,6 +61,7 @@ static u32 pcr_image = SL_ALT_IMAGE_PCR20;
 
 extern u32 sl_cpu_type;
 extern u32 sl_mle_start;
+extern void *sl_lz_base;
 
 u32 slaunch_get_cpu_type(void)
 {
@@ -88,6 +89,14 @@ static void __noreturn sl_txt_reset(u64 error)
 
 	for ( ; ; )
 		asm volatile ("hlt");
+
+	unreachable();
+}
+
+static void __noreturn sl_skinit_reset(void)
+{
+	/* AMD does not have a reset mechanism or an error register */
+	asm volatile ("ud2");
 
 	unreachable();
 }
@@ -174,12 +183,69 @@ static void sl_txt_validate_msrs(struct txt_os_mle_data *os_mle_data)
 		sl_txt_reset(SL_ERROR_MSR_INV_MISC_EN);
 }
 
+/*
+ * In order to simplify adding new entries and to minimize the number of
+ * differences between AMD and Intel, the event logs have actually two headers,
+ * both for TPM 1.2 and 2.0.
+ *
+ * For TPM 1.2 this is TCG_PCClientSpecIDEventStruct [1] with Intel's own
+ * TXT-specific header embedded inside its 'vendorInfo' field. The offset to
+ * this field is added to the base address in AMD path, making the code for
+ * adding new events the same for both vendors.
+ *
+ * TPM 2.0 in TXT uses HEAP_EVENT_LOG_POINTER_ELEMENT2_1 structure, which is
+ * normally constructed on the TXT stack [2]. For AMD, this structure is put
+ * inside TCG_EfiSpecIdEvent [3], also in 'vendorInfo' field. The actual offset
+ * to this field depends on number of hash algorithms supported by the event
+ * log.
+ *
+ * [1] https://www.trustedcomputinggroup.org/wp-content/uploads/TCG_PCClientImplementation_1-21_1_00.pdf
+ * [2] http://www.intel.com/content/dam/www/public/us/en/documents/guides/intel-txt-software-development-guide.pdf
+ * [3] https://trustedcomputinggroup.org/wp-content/uploads/TCG_PCClientSpecPlat_TPM_2p0_1p04_pub.pdf
+ */
 static void sl_find_event_log(void)
 {
 	struct txt_os_mle_data *os_mle_data;
 	struct txt_os_sinit_data *os_sinit_data;
 	void *txt_heap;
 
+	if (sl_cpu_type == SL_CPU_AMD) {
+		struct sl_header *sl_hdr = sl_lz_base;
+		struct lz_tag_tags_size *t = sl_lz_base + sl_hdr->bootloader_data_offset;
+		struct lz_tag_evtlog *t_log = (struct lz_tag_evtlog *)t;
+		void *end = (void *)t + t->size;
+
+		while ((void *)t_log < end
+		       && t_log->hdr.type != LZ_TAG_EVENT_LOG
+		       && t_log->hdr.type != LZ_TAG_END) {
+			t_log = (void *)t_log + t_log->hdr.len;
+		}
+
+		if (t_log->hdr.type != LZ_TAG_EVENT_LOG)
+			sl_skinit_reset(); /* No hope without an event log */
+
+		evtlog_base = (void *)(uintptr_t)t_log->address;
+		evtlog_size = t_log->size;
+
+		/* Check if it is TPM 2.0 event log */
+		if (!memcmp(evtlog_base + sizeof(struct tcg_pcr_event),
+			    TCG_SPECID_SIG, sizeof(TCG_SPECID_SIG))) {
+			log20_elem = evtlog_base + sizeof(struct tcg_pcr_event)
+				+ TCG_EfiSpecIdEvent_SIZE(
+				  TPM20_HASH_COUNT(evtlog_base
+					+ sizeof(struct tcg_pcr_event)));
+			tpm_log_ver = SL_TPM20_LOG;
+		} else {
+			evtlog_base += sizeof(struct tcg_pcr_event)
+				+ TCG_PCClientSpecIDEventStruct_SIZE;
+			evtlog_size -= sizeof(struct tcg_pcr_event)
+				+ TCG_PCClientSpecIDEventStruct_SIZE;
+		}
+
+		return;
+	}
+
+	/* Else it is Intel and TXT */
 	txt_heap = (void *)sl_txt_read(TXT_CR_HEAP_BASE);
 
 	os_mle_data = txt_os_mle_data_start(txt_heap);
@@ -215,6 +281,10 @@ static void sl_validate_event_log_buffer(void)
 	void *txt_heap;
 	void *txt_heap_end;
 	void *evtlog_end;
+
+	/* TODO is there something that can be done here to make sure the event
+	 * log buffer does not overlap the MLE on AMD
+	 */
 
 	if ((u64)evtlog_size > (LLONG_MAX - (u64)evtlog_base))
 		sl_txt_reset(SL_ERROR_INTEGER_OVERFLOW);
@@ -292,8 +362,12 @@ static void sl_tpm12_log_event(u32 pcr, u32 event_type,
 
 	total_size = sizeof(struct tcg_pcr_event) + event_size;
 
-	if (tpm12_log_event(evtlog_base, evtlog_size, total_size, pcr_event))
-		sl_txt_reset(SL_ERROR_TPM_LOGGING_FAILED);
+	if (tpm12_log_event(evtlog_base, evtlog_size, total_size, pcr_event)) {
+		if (sl_cpu_type == SL_CPU_INTEL)
+			sl_txt_reset(SL_ERROR_TPM_LOGGING_FAILED);
+		else
+			sl_skinit_reset();
+	}
 }
 
 static void sl_tpm20_log_event(u32 pcr, u32 event_type,
@@ -356,8 +430,12 @@ static void sl_tpm20_log_event(u32 pcr, u32 event_type,
 	total_size += sizeof(struct tcg_event_field) + event_size;
 
 	if (tpm20_log_event(log20_elem, evtlog_base, evtlog_size,
-	    total_size, &log_buf[0]))
-		sl_txt_reset(SL_ERROR_TPM_LOGGING_FAILED);
+	    total_size, &log_buf[0])) {
+		if (sl_cpu_type == SL_CPU_INTEL)
+			sl_txt_reset(SL_ERROR_TPM_LOGGING_FAILED);
+		else
+			sl_skinit_reset();
+	}
 }
 
 static void sl_tpm_extend_evtlog(u32 pcr, u32 type,
@@ -392,7 +470,7 @@ asmlinkage __visible void sl_main(void *bootparams)
 	 * this value also indicates that the kernel was booted successfully
 	 * through the Secure Launch entry point and is in SMX mode.
 	 */
-	if (!(sl_cpu_type & SL_CPU_INTEL))
+	if (!(sl_cpu_type & (SL_CPU_INTEL | SL_CPU_AMD)))
 		return;
 
 	/* Locate the TPM event log. */
@@ -494,30 +572,35 @@ asmlinkage __visible void sl_main(void *bootparams)
 				     "Measured initramfs");
 	}
 
-	/*
-	 * Some extra work to do on Intel, have to measure the OS-MLE
-	 * heap area.
-	 */
-	txt_heap = (void *)sl_txt_read(TXT_CR_HEAP_BASE);
-	os_mle_data = txt_os_mle_data_start(txt_heap);
+	if (sl_cpu_type & SL_CPU_INTEL) {
+		/*
+		 * Some extra work to do on Intel, have to measure the OS-MLE
+		 * heap area.
+		 */
+		txt_heap = (void *)sl_txt_read(TXT_CR_HEAP_BASE);
+		os_mle_data = txt_os_mle_data_start(txt_heap);
 
-	/* Measure only portions of OS-MLE data, not addresses/sizes etc. */
-	os_mle_tmp.version = os_mle_data->version;
-	os_mle_tmp.saved_misc_enable_msr = os_mle_data->saved_misc_enable_msr;
-	os_mle_tmp.saved_bsp_mtrrs = os_mle_data->saved_bsp_mtrrs;
+		/* Measure only portions of OS-MLE data, not addresses/sizes etc. */
+		os_mle_tmp.version = os_mle_data->version;
+		os_mle_tmp.saved_misc_enable_msr = os_mle_data->saved_misc_enable_msr;
+		os_mle_tmp.saved_bsp_mtrrs = os_mle_data->saved_bsp_mtrrs;
 
-	/* No PMR check is needed, the TXT heap is covered by the DPR */
+		/* No PMR check is needed, the TXT heap is covered by the DPR */
 
-	sl_tpm_extend_evtlog(pcr_config, TXT_EVTYPE_SLAUNCH,
-			     (u8 *)&os_mle_tmp,
-			     sizeof(struct txt_os_mle_data),
-			     "Measured TXT OS-MLE data");
+		sl_tpm_extend_evtlog(pcr_config, TXT_EVTYPE_SLAUNCH,
+				     (u8 *)&os_mle_tmp,
+				     sizeof(struct txt_os_mle_data),
+				     "Measured TXT OS-MLE data");
 
-	sl_tpm_extend_evtlog(17, TXT_EVTYPE_SLAUNCH_END, NULL, 0, "");
+		sl_tpm_extend_evtlog(17, TXT_EVTYPE_SLAUNCH_END, NULL, 0, "");
 
-	/*
-	 * Now that the OS-MLE data is measured, ensure the MTRR and
-	 * misc enable MSRs are what we expect.
-	 */
-	sl_txt_validate_msrs(os_mle_data);
+		/*
+		 * Now that the OS-MLE data is measured, ensure the MTRR and
+		 * misc enable MSRs are what we expect.
+		 */
+		sl_txt_validate_msrs(os_mle_data);
+	} else {
+		/* On AMD, the GIF needs to be enabled here. */
+		asm volatile ("stgi");
+	}
 }
