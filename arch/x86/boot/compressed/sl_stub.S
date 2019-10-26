@@ -74,6 +74,8 @@ SYM_FUNC_START(sl_stub_entry)
 	 * On entry, %ebx has the entry abs offset to sl_stub_entry. This
 	 * will be correctly scaled using the rva macro and avoid causing
 	 * relocations. Only %cs and %ds segments are known good.
+	 * Per the Linux ABI, %esi points to the boot params.
+	 * On AMD, %edx holds the LZ base.
 	 */
 
 	/* Load GDT, set segment regs and lret to __SL32_CS */
@@ -100,6 +102,12 @@ SYM_FUNC_START(sl_stub_entry)
 	lret
 
 .Lsl_cs:
+	/*
+	 * For AMD, Save LZ base before CPUID instruction overwrites it.
+	 * Performs cast from u32 to 64b void* for simpler use later.
+	 */
+	movl	%edx, rva(sl_lz_base)(%ebx)
+
 	/* Save our base pointer reg and page table for MLE */
 	pushl	%ebx
 	pushl	%ecx
@@ -108,7 +116,7 @@ SYM_FUNC_START(sl_stub_entry)
 	xorl	%eax, %eax
 	cpuid
 	cmpl	$(INTEL_CPUID_MFGID_EBX), %ebx
-	jnz	.Ldo_unknown_cpu
+	jnz	.Ldo_amd
 	cmpl	$(INTEL_CPUID_MFGID_EDX), %edx
 	jnz	.Ldo_unknown_cpu
 	cmpl	$(INTEL_CPUID_MFGID_ECX), %ecx
@@ -188,9 +196,22 @@ SYM_FUNC_START(sl_stub_entry)
 
 	jmp	.Lcpu_setup_done
 
-.Ldo_unknown_cpu:
-	/* Non-Intel CPUs are not yet supported */
-	ud2
+.Ldo_amd:
+	cmpl	$(AMD_CPUID_MFGID_EBX), %ebx
+	jnz	.Ldo_unknown_cpu
+	cmpl	$(AMD_CPUID_MFGID_EDX), %edx
+	jnz	.Ldo_unknown_cpu
+	cmpl	$(AMD_CPUID_MFGID_ECX), %ecx
+	jnz	.Ldo_unknown_cpu
+
+	popl	%ecx
+	/* Base pointer reg saved in Intel check */
+	popl	%ebx
+
+	/* Know it is AMD */
+	movl	$(SL_CPU_AMD), rva(sl_cpu_type)(%ebx)
+
+	/* On AMD %esi is set up by the Landing Zone, just go on */
 
 .Lcpu_setup_done:
 	/*
@@ -200,6 +221,10 @@ SYM_FUNC_START(sl_stub_entry)
 
 	/* Done, jump to normal 32b pm entry */
 	jmp	startup_32
+
+.Ldo_unknown_cpu:
+	/* Neither Intel nor AMD */
+	ud2
 SYM_FUNC_END(sl_stub_entry)
 
 SYM_FUNC_START(sl_find_mle_base)
@@ -676,6 +701,8 @@ SYM_DATA_END(sl_smx_rlp_mle_join)
 SYM_DATA(sl_cpu_type, .long 0x00000000)
 
 SYM_DATA(sl_mle_start, .long 0x00000000)
+
+SYM_DATA(sl_lz_base, .quad 0x0000000000000000)
 
 SYM_DATA_LOCAL(sl_txt_spin_lock, .long 0x00000000)
 

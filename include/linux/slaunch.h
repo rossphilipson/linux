@@ -344,9 +344,25 @@ struct smx_rlp_mle_join {
 	u32 rlp_entry_point; /* phys addr */
 } __packed;
 
+/* The TCG original Spec ID structure defined for TPM 1.2 */
+#define TCG_SPECID_SIG00 "Spec ID Event00"
+
+struct tpm12_tcg_specid_event_head {
+	char signature[16];
+	u32  platform_class;
+	u8   spec_ver_minor;
+	u8   spec_ver_major;
+	u8   errata;
+	u8   uintn_size;	/* reserved (must be 0) for 1.21 */
+	u8   vendor_info_size;
+	/* vendor_info[]; */
+} __packed;
+
 /*
- * TPM event log structures defined in both the TXT specification and
- * the TCG documentation.
+ * TPM event log structures defined by the TXT specification derived
+ * from the TCG documentation. For TXT this is setup as the conainter
+ * header. On AMD this header is embedded in to vendor information
+ * after the TCG spec ID header.
  */
 #define TPM12_EVTLOG_SIGNATURE "TXT Event Container"
 
@@ -361,6 +377,57 @@ struct tpm12_event_log_header {
 	u32 pcr_events_offset;
 	u32 next_event_offset;
 	/* PCREvents[] */
+} __packed;
+
+/* TPM Event Log Size Macros */
+#define TCG_PCClientSpecIDEventStruct_SIZE 			\
+		(sizeof(struct tpm12_tcg_specid_event_head))
+#define TCG_EfiSpecIdEvent_SIZE(n) \
+		((n) * sizeof(struct tcg_efi_specid_event_algs)	\
+		 + sizeof(struct tcg_efi_specid_event_head)	\
+		 + sizeof(u8) /* vendorInfoSize */)
+#define TPM20_HASH_COUNT(base) (*((u32 *)(base)			\
+		+ (offsetof(struct tcg_efi_specid_event_head, num_algs) >> 2)))
+
+/* AMD Specific Structures and Definitions */
+struct sl_header {
+	u16 lz_entry_point;
+	u16 bootloader_data_offset;
+	u16 lz_info_offset;
+} __packed;
+
+#define LZ_TAG_CLASS_MASK	0xF0
+
+/* Tags with no particular class */
+#define LZ_TAG_NO_CLASS		0x00
+#define LZ_TAG_END		0x00
+#define LZ_TAG_UNAWARE_OS	0x01
+#define LZ_TAG_TAGS_SIZE	0x0F	/* Always first */
+
+/* Tags specifying kernel type */
+#define LZ_TAG_BOOT_CLASS	0x10
+#define LZ_TAG_BOOT_LINUX	0x10
+#define LZ_TAG_BOOT_MB2		0x11
+
+/* Tags specific to TPM event log */
+#define LZ_TAG_EVENT_LOG_CLASS	0x20
+#define LZ_TAG_EVENT_LOG	0x20
+#define LZ_TAG_LZ_HASH		0x21
+
+struct lz_tag_hdr {
+	u8 type;
+	u8 len;
+} __packed;
+
+struct lz_tag_tags_size {
+	struct lz_tag_hdr hdr;
+	u16 size;
+} __packed;
+
+struct lz_tag_evtlog {
+	struct lz_tag_hdr hdr;
+	u32 address;
+	u32 size;
 } __packed;
 
 /*
@@ -430,6 +497,32 @@ static inline void *txt_sinit_mle_data_start(void *heap)
 	return heap + txt_bios_data_size(heap) +
 		txt_os_mle_data_size(heap) +
 		txt_sinit_mle_data_size(heap) + sizeof(u64);
+}
+
+/*
+ * SKINIT specific event logging.
+ */
+static inline u64 skinit_find_event_log(void *lz_base, u32 *evtlog_size)
+{
+	struct sl_header *sl_hdr = lz_base;
+	struct lz_tag_tags_size *t = lz_base + sl_hdr->bootloader_data_offset;
+	struct lz_tag_evtlog *t_log = (struct lz_tag_evtlog *)t;
+	void *end = (void *)t + t->size;
+
+	*evtlog_size = 0;
+
+	while ((void *)t_log < end
+	       && t_log->hdr.type != LZ_TAG_EVENT_LOG
+	       && t_log->hdr.type != LZ_TAG_END) {
+		t_log = (void *)t_log + t_log->hdr.len;
+	}
+
+	if (t_log->hdr.type != LZ_TAG_EVENT_LOG)
+		return 0;
+
+	*evtlog_size = t_log->size;
+
+	 return (u64)t_log->address;
 }
 
 /*
