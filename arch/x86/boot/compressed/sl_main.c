@@ -293,6 +293,16 @@ void sl_tpm_extend_pcr(struct tpm *tpm, u32 pcr, const u8 *data, u32 length,
 				   (const u8 *)desc, strlen(desc));
 }
 
+#include <asm/bootparam_utils.h>
+#include "misc.h"
+
+/* Make sure to un-static them in misc.c */
+extern char *vidmem;
+extern int vidport;
+extern int lines, cols;
+
+extern void sl_smctrl(void);
+
 void sl_main(u8 *bootparams)
 {
 	struct tpm *tpm;
@@ -303,6 +313,28 @@ void sl_main(u8 *bootparams)
 	unsigned long mmap = 0;
 	void *txt_heap;
 	u32 data_count, os_mle_len;
+	u8 *ap_pause;
+
+	boot_params = (struct boot_params*)bootparams;
+
+	sanitize_boot_params(boot_params);
+
+	if (boot_params->screen_info.orig_video_mode == 7) {
+		vidmem = (char *) 0xb0000;
+		vidport = 0x3b4;
+	} else {
+		vidmem = (char *) 0xb8000;
+		vidport = 0x3d4;
+	}
+
+	lines = boot_params->screen_info.orig_video_lines;
+	cols = boot_params->screen_info.orig_video_cols;
+
+	/* Move here from extract_kernel() */
+	console_init();
+	error_putstr("***RJP*** test string and hex:\n");
+	error_puthex(0xffaa2211);
+	error_putstr("\n");
 
 	/*
 	 * Testing this value indicates that the kernel was booted successfully
@@ -405,6 +437,24 @@ void sl_main(u8 *bootparams)
 		 * misc enable MSRs are what we expect.
 		 */
 		sl_txt_validate_msrs(os_mle_data);
+
+		error_putstr("***RJP*** ENABLE SMI UNPAUSE APs:\n");
+		error_putstr("\n");
+
+		/*
+		 * Re-enable SMI but leave NMIs disabled on BSP until an IDT is in
+		 * place. The OS will handle re-enabling NMIs later.
+		 */
+		smx_getsec_smctrl();
+		//sl_smctrl();
+
+		/* Release waiting APs */
+		//os_mle_data->mle_scratch[SL_SCRATCH_AP_PAUSE] = 1;
+		ap_pause = os_mle_data->mle_scratch + SL_SCRATCH_AP_PAUSE;
+		*((u32 *)ap_pause) = 1;
+
+		error_putstr("***RJP*** 222211111ZZZAAAAAAAAA UNPAUSED APs:\n");
+		error_putstr("\n");
 	}
 
 	tpm_relinquish_locality(tpm);

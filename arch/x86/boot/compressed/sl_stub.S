@@ -27,6 +27,25 @@
 #define IDT_VECTOR_LO_BITS	0
 #define IDT_VECTOR_HI_BITS	6
 
+.macro DEBUG_PUT_CHAR char
+	pushl	%edx
+	pushl	%eax
+	xorl	%ecx, %ecx
+
+	movw	$0x3f8, %dx
+	addw	$5, %dx
+1:
+	inb	%dx, %al
+	testb	$0x20, %al
+	jz	1b
+	movw	$0x3f8, %dx
+	movb	\char, %al
+	outb	%al, %dx
+
+	popl	%eax
+	popl	%edx
+.endm
+
 .macro GETSEC leaf
 	xorl	%ebx, %ebx
 	movl	\leaf, %eax	/* Leaf function */
@@ -120,17 +139,6 @@ SYM_FUNC_START(sl_stub)
 	/* Increment CPU count for BSP */
 	incl	sl_txt_cpu_count(%ebp)
 
-	/* Enable SMI with GETSEC[SMCTRL] */
-	GETSEC	$(SMX_X86_GETSEC_SMCTRL)
-
-	/* IRET-to-self can be used to enable NMIs which SENTER disabled */
-	leal	.Lnmi_enabled(%ebp), %eax
-	pushfl
-	pushl	$(__SL32_CS)
-	pushl	%eax
-	iret
-
-.Lnmi_enabled:
 	/* Clear the TXT error registers for a clean start of day */
 	movl	$0, (TXT_PRIV_CONFIG_REGS_BASE + TXT_CR_ERRORCODE)
 	movl	$0xffffffff, (TXT_PRIV_CONFIG_REGS_BASE + TXT_CR_ESTS)
@@ -245,7 +253,8 @@ SYM_FUNC_START(sl_txt_ap_entry)
 
 	/* Saved ebp from the BSP and stash OS-MLE pointer */
 	movl	(SL_mle_scratch + SL_SCRATCH_AP_EBP)(%eax), %ebp
-	movl	%eax, %edi
+	movl	%eax, %edi /* for call to sl_txt_load_regs */
+	movl	%eax, %esi /* for heap access in wake block */
 
 	/* Lock and get our stack index */
 	movl	$1, %ecx
@@ -292,22 +301,15 @@ SYM_FUNC_START(sl_txt_ap_entry)
 	/* Fixup MTRRs and misc enable MSR on APs too */
 	call	sl_txt_load_regs
 
-	/* Enable SMI with GETSEC[SMCTRL] */
-	GETSEC $(SMX_X86_GETSEC_SMCTRL)
-
-	/* IRET-to-self can be used to enable NMIs which SENTER disabled */
-	leal	.Lnmi_enabled_ap(%ebp), %eax
-	pushfl
-	pushl	$(__SL32_CS)
-	pushl	%eax
-	iret
-
-.Lnmi_enabled_ap:
 	/* Put APs in X2APIC mode like the BSP */
 	movl	$(MSR_IA32_APICBASE), %ecx
 	rdmsr
 	orl	$(XAPIC_ENABLE | X2APIC_ENABLE), %eax
 	wrmsr
+
+	/* Store the offset to the IRET return address */
+	movl	sl_txt_ap_wake_block(%ebp), %ecx
+	leal	(sl_ap_iret_offset - sl_txt_ap_wake_begin)(%ecx), %edi
 
 	/*
 	 * Basically done, increment the CPU count and jump off to the AP
@@ -488,6 +490,24 @@ SYM_FUNC_END(sl_txt_wake_aps)
 	.global sl_txt_ap_wake_begin
 sl_txt_ap_wake_begin:
 
+	/* Wait for BSP to indicate the AP can proceed */
+1:
+	pause
+	cmpl	$0, (SL_mle_scratch + SL_SCRATCH_AP_PAUSE)(%esi)
+	jz	1b
+
+	DEBUG_PUT_CHAR $0x51
+
+	/* Enable SMI with GETSEC[SMCTRL] and NMIs before final wait */
+	GETSEC $(SMX_X86_GETSEC_SMCTRL)
+
+	pushfl
+	pushl	$(__SL32_CS)
+	pushl	%edi
+	iret
+
+sl_ap_iret_offset:
+	DEBUG_PUT_CHAR $0x52
 	/*
 	 * Wait for NMI IPI in the relocated AP wake block which was provided
 	 * and protected in the memory map by the prelaunch code. Leave all
@@ -597,3 +617,14 @@ sl_txt_cpu_count:
 
 sl_txt_ap_wake_block:
 	.long	0x00000000
+
+	.code64
+SYM_FUNC_START(sl_smctrl)
+	pushq	%rax
+	pushq	%rbx
+	xorl	%ebx, %ebx
+	movl	$(SMX_X86_GETSEC_SMCTRL), %eax
+	.byte 	0x0f, 0x37
+	popq	%rbx
+	popq	%rax
+SYM_FUNC_END(sl_smctrl)

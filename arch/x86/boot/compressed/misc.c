@@ -50,9 +50,9 @@ struct boot_params *boot_params;
 memptr free_mem_ptr;
 memptr free_mem_end_ptr;
 
-static char *vidmem;
-static int vidport;
-static int lines, cols;
+char *vidmem;
+int vidport;
+int lines, cols;
 
 #ifdef CONFIG_KERNEL_GZIP
 #include "../../../../lib/decompress_inflate.c"

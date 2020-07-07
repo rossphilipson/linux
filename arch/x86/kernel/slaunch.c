@@ -651,12 +651,6 @@ late_initcall(slaunch_late_init);
 
 __exitcall(slaunch_exit);
 
-static inline void txt_getsec_sexit(void)
-{
-	asm volatile (".byte 0x0f,0x37\n"
-		      : : "a" (SMX_X86_GETSEC_SEXIT));
-}
-
 void slaunch_sexit(void)
 {
 	void __iomem *config;
@@ -711,7 +705,7 @@ void slaunch_sexit(void)
 	cr4_set_bits(X86_CR4_SMXE);
 
 	/* Do the SEXIT SMX operation */
-	txt_getsec_sexit();
+	smx_getsec_sexit();
 
 	pr_emerg("TXT SEXIT complete.");
 }

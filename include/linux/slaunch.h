@@ -422,6 +422,18 @@ static inline void *txt_sinit_mle_data_start(void *heap)
 		txt_sinit_mle_data_size(heap) + sizeof(u64);
 }
 
+static inline void smx_getsec_sexit(void)
+{
+	asm volatile (".byte 0x0f,0x37"
+		      : : "a" (SMX_X86_GETSEC_SEXIT));
+}
+
+static inline void smx_getsec_smctrl(void)
+{
+	asm volatile (".byte 0x0f,0x37"
+		      : : "a" (SMX_X86_GETSEC_SMCTRL), "b" (0));
+}
+
 /*
  * TPM event logging functions.
  */
