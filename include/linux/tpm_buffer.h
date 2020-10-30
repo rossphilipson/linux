@@ -18,6 +18,10 @@
 #ifndef __LINUX_TPM_BUFFER_H__
 #define __LINUX_TPM_BUFFER_H__
 
+#ifdef COMPRESSED_KERNEL
+static u8 _tpm_buffer[PAGE_SIZE] = {0};
+#endif
+
 struct tpm_header {
 	__be16 tag;
 	__be32 length;
@@ -52,7 +56,11 @@ static inline void tpm_buf_reset(struct tpm_buf *buf, u16 tag, u32 ordinal)
 
 static inline int tpm_buf_init(struct tpm_buf *buf, u16 tag, u32 ordinal)
 {
+#ifdef COMPRESSED_KERNEL
+	buf->data = _tpm_buffer;
+#else
 	buf->data = (u8 *)__get_free_page(GFP_KERNEL);
+#endif
 	if (!buf->data)
 		return -ENOMEM;
 
@@ -63,7 +71,9 @@ static inline int tpm_buf_init(struct tpm_buf *buf, u16 tag, u32 ordinal)
 
 static inline void tpm_buf_destroy(struct tpm_buf *buf)
 {
+#ifndef COMPRESSED_KERNEL
 	free_page((unsigned long)buf->data);
+#endif
 }
 
 static inline u32 tpm_buf_length(struct tpm_buf *buf)
@@ -92,7 +102,9 @@ static inline void tpm_buf_append(struct tpm_buf *buf,
 		return;
 
 	if ((len + new_len) > PAGE_SIZE) {
+#ifndef COMPRESSED_KERNEL
 		WARN(1, "tpm_buf: overflow\n");
+#endif
 		buf->flags |= TPM_BUF_OVERFLOW;
 		return;
 	}
