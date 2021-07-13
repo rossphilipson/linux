@@ -610,7 +610,8 @@ extern u32 slaunch_get_cpu_type(void);
 /*
  * External functions avalailable in mainline kernel.
  */
-extern void slaunch_setup(void);
+extern void slaunch_setup_txt(void);
+extern void slaunch_setup_skinit(void);
 extern u32 slaunch_get_flags(void);
 extern struct sl_ap_wake_info *slaunch_get_ap_wake_info(void);
 extern struct acpi_table_header *slaunch_get_dmar_table(struct acpi_table_header *dmar);
@@ -623,7 +624,8 @@ extern void slaunch_finalize(int do_sexit);
 #else
 
 #define slaunch_get_cpu_type()		0
-#define slaunch_setup()			do { } while (0)
+#define slaunch_setup_txt()		do { } while (0)
+#define slaunch_setup_skinit()		do { } while (0)
 #define slaunch_get_flags()		0
 #define slaunch_get_dmar_table(d)	(d)
 #define slaunch_finalize(d)		do { } while (0)

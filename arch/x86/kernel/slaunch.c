@@ -17,6 +17,7 @@
 #include <asm/sections.h>
 #include <asm/tlbflush.h>
 #include <asm/e820/api.h>
+#include <asm/svm.h>
 #include <asm/setup.h>
 #include <linux/slaunch.h>
 
@@ -378,9 +379,9 @@ static void __init slaunch_fetch_os_mle_fields(void __iomem *txt)
 }
 
 /*
- * Intel specific late stub setup and validation.
+ * Intel TXT specific late stub setup and validation.
  */
-static void __init slaunch_setup_intel(void)
+void __init slaunch_setup_txt(void)
 {
 	void __iomem *txt;
 	u64 one = TXT_REGVALUE_ONE, val;
@@ -459,20 +460,6 @@ static void __init slaunch_setup_intel(void)
 	pr_info("Intel TXT setup complete\n");
 }
 
-void __init slaunch_setup(void)
-{
-	u32 vendor[4];
-
-	/* Get manufacturer string with CPUID 0 */
-	cpuid(0, &vendor[0], &vendor[1], &vendor[2], &vendor[3]);
-
-	/* Only Intel TXT is supported at this point */
-	if (vendor[1] == INTEL_CPUID_MFGID_EBX &&
-	    vendor[2] == INTEL_CPUID_MFGID_ECX &&
-	    vendor[3] == INTEL_CPUID_MFGID_EDX)
-		slaunch_setup_intel();
-}
-
 static inline void smx_getsec_sexit(void)
 {
 	asm volatile (".byte 0x0f,0x37\n"
@@ -542,4 +529,37 @@ void slaunch_finalize(int do_sexit)
 	smx_getsec_sexit();
 
 	pr_emerg("TXT SEXIT complete.");
+}
+
+/*
+ * AMD specific SKINIT CPU setup and initialization.
+ */
+void slaunch_setup_skinit(void)
+{
+	u64 val;
+
+	if (!boot_cpu_has(X86_FEATURE_SKINIT))
+		return;
+
+	/*
+	 * If the platform is performing a Secure Launch via SKINIT
+	 * INIT_REDIRECTION flag will be active.
+	 */
+	rdmsrl(MSR_VM_CR, val);
+	if (!(val & (1 << SVM_VM_CR_INIT_REDIRECTION)))
+		return;
+
+	/*
+	 * We don't yet handle #SX.  Disable INIT_REDIRECTION first, before
+	 * enabling GIF, so a pending INIT resets us, rather than causing a
+	 * panic due to an unknown exception.
+	 */
+	wrmsrl(MSR_VM_CR, val & ~SVM_VM_CR_INIT_REDIRECTION);
+	asm volatile ( "stgi" ::: "memory" );
+
+	/* Set flags on BSP so subsequent code knows it was a SKINIT launch */
+	if (!(sl_flags & SL_FLAG_ARCH_SKINIT)) {
+		sl_flags |= (SL_FLAG_ACTIVE|SL_FLAG_ARCH_SKINIT);
+		pr_info("AMD SKINIT setup complete\n");
+	}
 }
