@@ -488,6 +488,10 @@ static struct setup_data *sl_handle_setup_data(struct setup_data *curr)
 		ind = (struct setup_indirect *)
 			((u8 *)curr + offsetof(struct setup_data, data));
 
+		/* If this is the secure launch setup data, skip it */
+		if (ind->type == (SETUP_INDIRECT|SETUP_SECURE_LAUNCH))
+			return next;
+
 		sl_check_pmr_coverage((void *)ind->addr, ind->len, true);
 
 		sl_tpm_extend_evtlog(pcr_config, TXT_EVTYPE_SLAUNCH,

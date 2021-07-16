@@ -152,6 +152,8 @@
 #define SL_ERROR_TPM_NUMBER_ALGS	0xc000801f
 #define SL_ERROR_TPM_UNKNOWN_DIGEST	0xc0008020
 #define SL_ERROR_TPM_INVALID_EVENT	0xc0008021
+#define SL_ERROR_MISSING_EVENT_LOG	0xc0008022
+#define SL_ERROR_MAP_SETUP_DATA		0xc0008023
 
 /*
  * Secure Launch Defined Limits
@@ -185,6 +187,7 @@
 
 #ifndef __ASSEMBLY__
 
+#include <asm/bootparam.h>
 #include <linux/io.h>
 #include <linux/tpm.h>
 #include <linux/tpm_eventlog.h>
@@ -401,7 +404,7 @@ struct sl_header {
 /* Tags with no particular class */
 #define LZ_TAG_NO_CLASS		0x00
 #define LZ_TAG_END		0x00
-#define LZ_TAG_UNAWARE_OS	0x01
+#define LZ_TAG_SETUP_INDIRECT	0x01
 #define LZ_TAG_TAGS_SIZE	0x0F	/* Always first */
 
 /* Tags specifying kernel type */
@@ -422,6 +425,14 @@ struct lz_tag_hdr {
 struct lz_tag_tags_size {
 	struct lz_tag_hdr hdr;
 	u16 size;
+} __packed;
+
+struct lz_tag_setup_indirect {
+	struct lz_tag_hdr hdr;
+	/* type = SETUP_INDIRECT */
+	struct setup_data data;
+	/* type = SETUP_INDIRECT | SETUP_SECURE_LAUNCH */
+	struct setup_indirect indirect;
 } __packed;
 
 struct lz_tag_evtlog {
@@ -617,6 +628,7 @@ extern struct sl_ap_wake_info *slaunch_get_ap_wake_info(void);
 extern struct acpi_table_header *slaunch_get_dmar_table(struct acpi_table_header *dmar);
 extern void __noreturn slaunch_txt_reset(void __iomem *txt,
 					 const char *msg, u64 error);
+extern void __noreturn slaunch_skinit_reset(const char *msg, u64 error);
 extern void slaunch_finalize(int do_sexit);
 
 #endif /* !__ASSEMBLY */
