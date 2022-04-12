@@ -728,6 +728,11 @@ void __init e820__memory_setup_extended(u64 phys_addr, u32 data_len)
 	struct setup_data *sdata;
 
 	sdata = early_memremap(phys_addr, data_len);
+	if (!sdata) {
+		pr_warn("e820: failed to memremap extended\n");
+		return;
+	}
+
 	entries = sdata->len / sizeof(*extmap);
 	extmap = (struct boot_e820_entry *)(sdata->data);
 

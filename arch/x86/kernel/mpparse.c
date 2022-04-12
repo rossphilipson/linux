@@ -424,6 +424,9 @@ static unsigned long __init get_mpc_size(unsigned long physptr)
 	unsigned long size;
 
 	mpc = early_memremap(physptr, PAGE_SIZE);
+	if (!mpc)
+		return 0;
+
 	size = mpc->length;
 	early_memunmap(mpc, PAGE_SIZE);
 	apic_printk(APIC_VERBOSE, "  mpc: %lx-%lx\n", physptr, physptr + size);
@@ -437,7 +440,16 @@ static int __init check_physptr(struct mpf_intel *mpf, unsigned int early)
 	unsigned long size;
 
 	size = get_mpc_size(mpf->physptr);
+	if (!size) {
+		pr_err("MPTABLE: error getting MP table size\n");
+		return -1;
+	}
+
 	mpc = early_memremap(mpf->physptr, size);
+	if (!mpc) {
+		pr_err("MPTABLE: error mapping MP table physptr\n");
+		return -1;
+	}
 
 	/*
 	 * Read the physical hardware table.  Anything here will
@@ -552,6 +564,7 @@ out:
 
 static void __init smp_reserve_memory(struct mpf_intel *mpf)
 {
+	/* If get_mpc_size() is 0, memblock_reserve() will just do nothing */
 	memblock_reserve(mpf->physptr, get_mpc_size(mpf->physptr));
 }
 
@@ -567,6 +580,11 @@ static int __init smp_scan_config(unsigned long base, unsigned long length)
 
 	while (length > 0) {
 		bp = early_memremap(base, length);
+		if (!bp) {
+			pr_err("MPTABLE: error mapping SMP config\n");
+			return 0;
+		}	
+
 		mpf = (struct mpf_intel *)bp;
 		if ((*bp == SMP_MAGIC_IDENT) &&
 		    (mpf->length == 1) &&
@@ -864,6 +882,11 @@ static int __init update_mp_table(void)
 		goto do_unmap_mpf;
 
 	size = get_mpc_size(mpf->physptr);
+	if (!size) {
+		pr_err("MPTABLE: error getting MP table size\n");
+		goto do_unmap_mpf;
+	}
+
 	mpc = early_memremap(mpf->physptr, size);
 	if (!mpc) {
 		pr_err("MPTABLE: mpc early_memremap() failed\n");

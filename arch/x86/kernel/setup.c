@@ -345,6 +345,11 @@ static void __init parse_setup_data(void)
 		u32 data_len, data_type;
 
 		data = early_memremap(pa_data, sizeof(*data));
+		if (!data) {
+			pr_warn("setup: failed to memremap in parse_setup_data\n");
+			return;
+		}
+
 		data_len = data->len + sizeof(struct setup_data);
 		data_type = data->type;
 		pa_next = data->next;

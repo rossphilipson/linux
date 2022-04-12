@@ -685,6 +685,8 @@ static void __init xen_phys_memcpy(phys_addr_t dest, phys_addr_t src,
 		len = min(dest_len, src_len);
 		to = early_memremap(dest - dest_off, dest_len + dest_off);
 		from = early_memremap(src - src_off, src_len + src_off);
+		if (!to || !from)
+			panic("xen: failed to memmap for physical address memcpy\n");
 		memcpy(to, from, len);
 		early_memunmap(to, dest_len + dest_off);
 		early_memunmap(from, src_len + src_off);
