@@ -75,6 +75,8 @@ static unsigned long __init uv_early_read_mmr(unsigned long addr)
 	unsigned long val, *mmr;
 
 	mmr = early_ioremap(UV_LOCAL_MMR_BASE | addr, sizeof(*mmr));
+	if (!mmr)
+		panic("UV: error: failed to ioremap MMR\n");
 	val = *mmr;
 	early_iounmap(mmr, sizeof(*mmr));
 
