@@ -2,6 +2,9 @@
 /*
  * Architecture specific OF callbacks.
  */
+
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #include <linux/export.h>
 #include <linux/io.h>
 #include <linux/interrupt.h>
@@ -292,10 +295,20 @@ static void __init x86_flattree_get_config(void)
 	map_len = max(PAGE_SIZE - (initial_dtb & ~PAGE_MASK), (u64)128);
 
 	dt = early_memremap(initial_dtb, map_len);
+	if (!dt) {
+		pr_warn("failed to memremap initial dtb\n");
+		return;
+	}
+
 	size = fdt_totalsize(dt);
 	if (map_len < size) {
 		early_memunmap(dt, map_len);
 		dt = early_memremap(initial_dtb, size);
+		if (!dt) {
+			pr_warn("failed to memremap initial dtb\n");
+			return;
+		}
+
 		map_len = size;
 	}
 

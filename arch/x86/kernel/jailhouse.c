@@ -221,6 +221,9 @@ static void __init jailhouse_init_platform(void)
 
 	while (pa_data) {
 		mapping = early_memremap(pa_data, sizeof(header));
+		if (!mapping)
+			panic("Jailhouse: failed to memremap setup_data header\n");
+
 		memcpy(&header, mapping, sizeof(header));
 		early_memunmap(mapping, sizeof(header));
 
@@ -241,6 +244,9 @@ static void __init jailhouse_init_platform(void)
 	setup_data_len = min_t(unsigned long, sizeof(setup_data),
 			       (unsigned long)header.len);
 	mapping = early_memremap(pa_data, setup_data_len);
+	if (!mapping)
+		panic("Jailhouse: failed to memremap setup_data\n");
+
 	memcpy(&setup_data, mapping, setup_data_len);
 	early_memunmap(mapping, setup_data_len);
 

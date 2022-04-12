@@ -8,6 +8,8 @@
  *      (c) 2008 Alexey Starikovskiy <astarikovskiy@suse.de>
  */
 
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #include <linux/mm.h>
 #include <linux/init.h>
 #include <linux/delay.h>
@@ -145,33 +147,33 @@ static int __init smp_check_mpc(struct mpc_table *mpc, char *oem, char *str)
 {
 
 	if (memcmp(mpc->signature, MPC_SIGNATURE, 4)) {
-		pr_err("MPTABLE: bad signature [%c%c%c%c]!\n",
+		pr_err("bad signature [%c%c%c%c]!\n",
 		       mpc->signature[0], mpc->signature[1],
 		       mpc->signature[2], mpc->signature[3]);
 		return 0;
 	}
 	if (mpf_checksum((unsigned char *)mpc, mpc->length)) {
-		pr_err("MPTABLE: checksum error!\n");
+		pr_err("checksum error!\n");
 		return 0;
 	}
 	if (mpc->spec != 0x01 && mpc->spec != 0x04) {
-		pr_err("MPTABLE: bad table version (%d)!!\n", mpc->spec);
+		pr_err("bad table version (%d)!!\n", mpc->spec);
 		return 0;
 	}
 	if (!mpc->lapic) {
-		pr_err("MPTABLE: null local APIC address!\n");
+		pr_err("null local APIC address!\n");
 		return 0;
 	}
 	memcpy(oem, mpc->oem, 8);
 	oem[8] = 0;
-	pr_info("MPTABLE: OEM ID: %s\n", oem);
+	pr_info("OEM ID: %s\n", oem);
 
 	memcpy(str, mpc->productid, 12);
 	str[12] = 0;
 
-	pr_info("MPTABLE: Product ID: %s\n", str);
+	pr_info("Product ID: %s\n", str);
 
-	pr_info("MPTABLE: APIC at: 0x%X\n", mpc->lapic);
+	pr_info("APIC at: 0x%X\n", mpc->lapic);
 
 	return 1;
 }
@@ -242,7 +244,7 @@ static int __init smp_read_mpc(struct mpc_table *mpc, unsigned early)
 	}
 
 	if (!num_processors)
-		pr_err("MPTABLE: no processors registered!\n");
+		pr_err("no processors registered!\n");
 	return num_processors;
 }
 
@@ -424,6 +426,9 @@ static unsigned long __init get_mpc_size(unsigned long physptr)
 	unsigned long size;
 
 	mpc = early_memremap(physptr, PAGE_SIZE);
+	if (!mpc)
+		return 0;
+
 	size = mpc->length;
 	early_memunmap(mpc, PAGE_SIZE);
 	apic_printk(APIC_VERBOSE, "  mpc: %lx-%lx\n", physptr, physptr + size);
@@ -437,7 +442,16 @@ static int __init check_physptr(struct mpf_intel *mpf, unsigned int early)
 	unsigned long size;
 
 	size = get_mpc_size(mpf->physptr);
+	if (!size) {
+		pr_err("error getting MP table size\n");
+		return -1;
+	}
+
 	mpc = early_memremap(mpf->physptr, size);
+	if (!mpc) {
+		pr_err("error mapping MP table physptr\n");
+		return -1;
+	}
 
 	/*
 	 * Read the physical hardware table.  Anything here will
@@ -505,7 +519,7 @@ void __init default_get_smp_config(unsigned int early)
 
 	mpf = early_memremap(mpf_base, sizeof(*mpf));
 	if (!mpf) {
-		pr_err("MPTABLE: error mapping MP table\n");
+		pr_err("error mapping MP table\n");
 		return;
 	}
 
@@ -552,6 +566,7 @@ out:
 
 static void __init smp_reserve_memory(struct mpf_intel *mpf)
 {
+	/* If get_mpc_size() is 0, memblock_reserve() will just do nothing */
 	memblock_reserve(mpf->physptr, get_mpc_size(mpf->physptr));
 }
 
@@ -567,6 +582,11 @@ static int __init smp_scan_config(unsigned long base, unsigned long length)
 
 	while (length > 0) {
 		bp = early_memremap(base, length);
+		if (!bp) {
+			pr_err("error mapping SMP config\n");
+			return 0;
+		}
+
 		mpf = (struct mpf_intel *)bp;
 		if ((*bp == SMP_MAGIC_IDENT) &&
 		    (mpf->length == 1) &&
@@ -850,7 +870,7 @@ static int __init update_mp_table(void)
 
 	mpf = early_memremap(mpf_base, sizeof(*mpf));
 	if (!mpf) {
-		pr_err("MPTABLE: mpf early_memremap() failed\n");
+		pr_err("mpf early_memremap() failed\n");
 		return 0;
 	}
 
@@ -864,9 +884,14 @@ static int __init update_mp_table(void)
 		goto do_unmap_mpf;
 
 	size = get_mpc_size(mpf->physptr);
+	if (!size) {
+		pr_err("error getting MP table size\n");
+		goto do_unmap_mpf;
+	}
+
 	mpc = early_memremap(mpf->physptr, size);
 	if (!mpc) {
-		pr_err("MPTABLE: mpc early_memremap() failed\n");
+		pr_err("mpc early_memremap() failed\n");
 		goto do_unmap_mpf;
 	}
 
@@ -897,7 +922,7 @@ static int __init update_mp_table(void)
 	} else {
 		mpc_new = early_memremap(mpc_new_phys, mpc_new_length);
 		if (!mpc_new) {
-			pr_err("MPTABLE: new mpc early_memremap() failed\n");
+			pr_err("new mpc early_memremap() failed\n");
 			goto do_unmap_mpc;
 		}
 		mpf->physptr = mpc_new_phys;
@@ -911,7 +936,7 @@ static int __init update_mp_table(void)
 			/* steal 16 bytes from [0, 1k) */
 			mpf_new = early_memremap(0x400 - 16, sizeof(*mpf_new));
 			if (!mpf_new) {
-				pr_err("MPTABLE: new mpf early_memremap() failed\n");
+				pr_err("new mpf early_memremap() failed\n");
 				goto do_unmap_mpc;
 			}
 			pr_info("mpf new: %x\n", 0x400 - 16);

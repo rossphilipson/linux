@@ -1824,6 +1824,8 @@ static unsigned long __init xen_read_phys_ulong(phys_addr_t addr)
 	unsigned long val;
 
 	vaddr = early_memremap_ro(addr, sizeof(val));
+	if (!vaddr)
+		panic("xen: failed to memmap physical address: 0x%llx\n", addr);
 	val = *vaddr;
 	early_memunmap(vaddr, sizeof(val));
 	return val;
@@ -1919,14 +1921,20 @@ void __init xen_relocate_p2m(void)
 	new_p2m = (unsigned long *)(2 * PGDIR_SIZE);
 	for (idx_pud = 0; idx_pud < n_pud; idx_pud++) {
 		pud = early_memremap(pud_phys, PAGE_SIZE);
+		if (!pud)
+			panic("xen: failed to memmap PUD physical address: 0x%llx\n", pud_phys);
 		clear_page(pud);
 		for (idx_pmd = 0; idx_pmd < min(n_pmd, PTRS_PER_PUD);
 				idx_pmd++) {
 			pmd = early_memremap(pmd_phys, PAGE_SIZE);
+			if (!pmd)
+				panic("xen: failed to memmap PMD physical address: 0x%llx\n", pmd_phys);
 			clear_page(pmd);
 			for (idx_pt = 0; idx_pt < min(n_pt, PTRS_PER_PMD);
 					idx_pt++) {
 				pt = early_memremap(pt_phys, PAGE_SIZE);
+				if (!pt)
+					panic("xen: failed to memmap PT physical address: 0x%llx\n", pt_phys);
 				clear_page(pt);
 				for (idx_pte = 0;
 				     idx_pte < min(n_pte, PTRS_PER_PTE);

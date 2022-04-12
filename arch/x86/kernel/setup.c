@@ -5,6 +5,9 @@
  * This file contains the setup_arch() code, which handles the architecture-dependent
  * parts of early kernel initialization.
  */
+
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #include <linux/acpi.h>
 #include <linux/console.h>
 #include <linux/crash_dump.h>
@@ -344,7 +347,7 @@ static void __init add_early_ima_buffer(u64 phys_addr)
 
 	data = early_memremap(phys_addr + sizeof(struct setup_data), sizeof(*data));
 	if (!data) {
-		pr_warn("setup: failed to memremap ima_setup_data entry\n");
+		pr_warn("failed to memremap ima_setup_data entry\n");
 		return;
 	}
 
@@ -401,6 +404,11 @@ static void __init parse_setup_data(void)
 		u32 data_len, data_type;
 
 		data = early_memremap(pa_data, sizeof(*data));
+		if (!data) {
+			pr_warn("failed to memremap in parse_setup_data\n");
+			return;
+		}
+
 		data_len = data->len + sizeof(struct setup_data);
 		data_type = data->type;
 		pa_next = data->next;
@@ -421,6 +429,11 @@ static void __init parse_setup_data(void)
 			break;
 		case SETUP_RNG_SEED:
 			data = early_memremap(pa_data, data_len);
+			if (!data) {
+				pr_warn("failed to memremap RNG seed data\n");
+				return;
+			}
+
 			add_bootloader_randomness(data->data, data->len);
 			/* Zero seed for forward secrecy. */
 			memzero_explicit(data->data, data->len);
@@ -446,7 +459,7 @@ static void __init memblock_x86_reserve_range_setup_data(void)
 	while (pa_data) {
 		data = early_memremap(pa_data, sizeof(*data));
 		if (!data) {
-			pr_warn("setup: failed to memremap setup_data entry\n");
+			pr_warn("failed to memremap setup_data entry\n");
 			return;
 		}
 
@@ -460,7 +473,7 @@ static void __init memblock_x86_reserve_range_setup_data(void)
 			early_memunmap(data, sizeof(*data));
 			data = early_memremap(pa_data, len);
 			if (!data) {
-				pr_warn("setup: failed to memremap indirect setup_data\n");
+				pr_warn("failed to memremap indirect setup_data\n");
 				return;
 			}
 

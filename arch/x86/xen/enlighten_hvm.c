@@ -70,6 +70,8 @@ static void __init reserve_shared_info(void)
 
 	memblock_reserve(pa, PAGE_SIZE);
 	HYPERVISOR_shared_info = early_memremap(pa, PAGE_SIZE);
+	if (!HYPERVISOR_shared_info)
+		panic("xen: failed to memmap hypervisor shared page: 0x%llx\n", pa);
 }
 
 static void __init xen_hvm_init_mem_mapping(void)

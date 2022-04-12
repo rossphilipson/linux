@@ -9,6 +9,9 @@
  * quirks and other tweaks, and feeds that into the generic Linux memory
  * allocation code routines via a platform independent interface (memblock, etc.).
  */
+
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #include <linux/crash_dump.h>
 #include <linux/memblock.h>
 #include <linux/suspend.h>
@@ -728,6 +731,11 @@ void __init e820__memory_setup_extended(u64 phys_addr, u32 data_len)
 	struct setup_data *sdata;
 
 	sdata = early_memremap(phys_addr, data_len);
+	if (!sdata) {
+		pr_warn("failed to memremap extended\n");
+		return;
+	}
+
 	entries = sdata->len / sizeof(*extmap);
 	extmap = (struct boot_e820_entry *)(sdata->data);
 
@@ -1007,7 +1015,7 @@ void __init e820__reserve_setup_data(void)
 	while (pa_data) {
 		data = early_memremap(pa_data, sizeof(*data));
 		if (!data) {
-			pr_warn("e820: failed to memremap setup_data entry\n");
+			pr_warn("failed to memremap setup_data entry\n");
 			return;
 		}
 
@@ -1030,7 +1038,7 @@ void __init e820__reserve_setup_data(void)
 			early_memunmap(data, sizeof(*data));
 			data = early_memremap(pa_data, len);
 			if (!data) {
-				pr_warn("e820: failed to memremap indirect setup_data\n");
+				pr_warn("failed to memremap indirect setup_data\n");
 				return;
 			}
 
