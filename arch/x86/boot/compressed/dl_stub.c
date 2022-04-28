@@ -23,6 +23,7 @@
 #include <asm/bitops.h>
 #include <asm/efi.h>
 #include <asm/bootparam_utils.h>
+#include <linux/drtm_table.h>
 #include <linux/slaunch.h>
 
 #define SL_ACM_MTRR_MASK	0xffffff  /* ACM requires 36b mask */
@@ -192,7 +193,7 @@ static void dl_txt_setup_mtrrs(void *drtm_table)
 
 void dynamic_launch_event(void *drtm_table)
 {
-	if (drtm_info->architecture == SL_INTEL_TXT) {
+	if (drtm_info->architecture == DRTM_INTEL_TXT) {
 		/*
 		 * Set ACM memory to WB and all other to UC. Note all
 		 * MTRRs have been saved in the TXT heap for restoration
@@ -202,7 +203,7 @@ void dynamic_launch_event(void *drtm_table)
 
 		/* TODO can we do exit_boot() after messing with MTRRs so we
 		 * can use efi_err() etc? */
-	} else if (drtm_info->architecture == SL_AMD_SKINIT) {
+	} else if (drtm_info->architecture == DRTM_AMD_SKINIT) {
 		/* TODO rewrite this if block if there is nothing to do for SKINIT */
 	} else {
 		/* TODO die horribly */
