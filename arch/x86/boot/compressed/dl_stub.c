@@ -137,20 +137,9 @@ static void dl_txt_setup_acm_mtrrs(u64 base, u32 size)
 	}
 }
 
-static void dl_txt_setup_mtrrs(void *drtm_table)
+static void dl_txt_setup_mtrrs(struct drtm_entry_dce_info *dce_info)
 {
-	struct drtm_entry_dce_info *dce_info;
 	unsigned long cr0, cr4, msr;
-
-	dce_info = (struct drtm_entry_dce_info *)
-			drtm_next_of_type_subtype(drtm_table, NULL,
-						  DRTM_ENTRY_DCE_INFO,
-						  DRTM_DCE_TXT_ACM);
-	if (!dce_info)
-		sl_txt_reset(DL_ERROR_NO_DRTM_TABLE);
-
-	if (!dce_info->dce_base || dce_info->size)
-		sl_txt_reset(DL_ERROR_DCE_VALUES);
 
 	/* Disable interrupts and caching */
 	native_irq_disable();
@@ -193,19 +182,41 @@ static void dl_txt_setup_mtrrs(void *drtm_table)
 
 void dynamic_launch_event(void *drtm_table)
 {
-	if (drtm_info->architecture == DRTM_INTEL_TXT) {
+	struct drtm_entry_architecture *arch_info;
+	struct drtm_entry_dce_info *dce_info;
+
+	arch_info = (struct drtm_entry_architecture_info *)
+			drtm_next_of_type(drtm_table, NULL,
+					  DRTM_ENTRY_ARCHITECTURE);
+	if (!arch_info)
+		sl_txt_reset(DL_ERROR_NO_DRTM_TABLE);
+
+	dce_info = (struct drtm_entry_dce_info *)
+			drtm_next_of_type_subtype(drtm_table, NULL,
+						  DRTM_ENTRY_DCE_INFO,
+						  DRTM_DCE_TXT_ACM);
+	if (!dce_info)
+		sl_txt_reset(DL_ERROR_NO_DRTM_TABLE);
+
+	if (!dce_info->dce_base || dce_info->size)
+		sl_txt_reset(DL_ERROR_DCE_VALUES);
+
+	if (arch_info->architecture == DRTM_INTEL_TXT) {
 		/*
 		 * Set ACM memory to WB and all other to UC. Note all
 		 * MTRRs have been saved in the TXT heap for restoration
 		 * after SENTER
 		 */
-		dl_txt_setup_mtrrs(drtm_table);
-
-		/* TODO can we do exit_boot() after messing with MTRRs so we
-		 * can use efi_err() etc? */
-	} else if (drtm_info->architecture == DRTM_AMD_SKINIT) {
-		/* TODO rewrite this if block if there is nothing to do for SKINIT */
+		dl_txt_setup_mtrrs(dce_info);
 	} else {
-		/* TODO die horribly */
+		/* Die horribly, AMD support not present yet */
+		asm volatile ("ud2");
 	}
+
+	/* Final entry into dynamic launch event code */
+	dl_stub_entry(arch_info->architecture,
+		      dce_info->dce_base,
+		      dce_info->dce_size);
+
+	unreachable();
 }

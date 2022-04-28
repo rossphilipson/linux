@@ -12,15 +12,16 @@
 #define DRTM_TABLE_GUID				EFI_GUID(0x877a9b2a, 0x0385, 0x45d1, 0xa0, 0x34, 0x9d, 0xac, 0x9c, 0x9e, 0x56, 0x5f)
 
 /* General values */
-#define DRTM_TABLE_HEADER		0x0000	/* Always first */
+#define DRTM_TABLE_HEADER		0x0001	/* Always first */
 #define DRTM_ENTRY_END			0xffff
 #define DRTM_NO_SUBTYPE			0x0000
+/* Types 0x0002 - 0x0007 are reserved */
 
 /* DRTM general entries */
-#define DRTM_ENTRY_ARCHITECTURE		0x0001
-#define DRTM_ENTRY_DCE_INFO		0x0002
-#define DRTM_ENTRY_ENTRYPOINT		0x0003
-#define DRTM_ENTRY_LOG_BUFFER		0x0004
+#define DRTM_ENTRY_ARCHITECTURE		0x0008
+#define DRTM_ENTRY_DCE_INFO		0x0009
+#define DRTM_ENTRY_ENTRYPOINT		0x000a
+#define DRTM_ENTRY_LOG_BUFFER		0x000b
 
 struct drtm_entry_hdr {
 	u16 type;
