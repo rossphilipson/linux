@@ -50,6 +50,7 @@ SYM_DATA_END_LABEL(kernel_info, SYM_L_LOCAL, kernel_info_end)
 	 * bit 9: Supported format of TPM 2.0 event log - TCG compliant
 	 */
 SYM_DATA_START(mle_header)
+	/* MLE header describled in TXT specification */
 	.long	0x9082ac5a  /* UUID0 */
 	.long	0x74a7476f  /* UUID1 */
 	.long	0xa2555c0f  /* UUID2 */
@@ -63,5 +64,7 @@ SYM_DATA_START(mle_header)
 	.long	0x00000227  /* Bit vector of MLE-supported capabilities */
 	.long	0x00000000  /* Starting linear address of command line (unused) */
 	.long	0x00000000  /* Ending linear address of command line (unused) */
+	/* Extended fields */
+	.long	rva(dynamic_launch_event) /* Linear address of DLE entry point */
 SYM_DATA_END(mle_header)
 #endif
