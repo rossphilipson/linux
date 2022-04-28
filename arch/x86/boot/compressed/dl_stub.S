@@ -94,7 +94,7 @@ SYM_FUNC_START(dl_stub_entry)
 
 	/* The DL Event */
 	testl	$(DRTM_INTEL_TXT), %edi
-	jz	.Ldo_skinit /* maybe AMD/SKINIT? */
+	jz	.Ldie /* AMD/SKINIT support here yet */
 
 	/* Intel/TXT GETSEC[SENTER] */
 	movl	$(SMX_X86_GETSEC_SENTER), %eax
@@ -102,34 +102,6 @@ SYM_FUNC_START(dl_stub_entry)
 	movl	%edx, %ecx
 	xorl	%edx, %edx
 	.byte 	0x0f, 0x37	/* GETSEC opcode */
-
-.Ldo_skinit:
-	testl	$(DRTM_AMD_SKINIT), %edi
-	jz	.Ldie
-
-	/* AMD SKINIT */
-	/* First have to assert #INIT on all non-BSP APs */
-	movl	$(MSR_IA32_APICBASE), %ecx
-	rdmsr
-	testl	$X2APIC_ENABLE, %eax
-	jz	.Lxapic
-
-	/* In x2APIC mode */
-	movl	$(APIC_ICR), %ecx
-	rdmsr
-	orl	$(APIC_DM_INIT | APIC_DEST_ALLBUT), %eax
-	wrmsr
-
-	jmp	.Lskinit
-.Lxapic:
-	/* In xAPIC mode */
-	andl	~$(APIC_VECTOR_MASK), %eax
-	addl	$(APIC_ICR), %eax
-	movl	$(APIC_DM_INIT | APIC_DEST_ALLBUT), (%eax)
-
-.Lskinit:
-	movl	%edi, %eax
-	skinit
 
 .Ldie:
 	ud2
