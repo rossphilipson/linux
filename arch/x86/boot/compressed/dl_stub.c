@@ -44,9 +44,9 @@
 #define MTRRphysMaskVal(r)	((~(r - 1) & SL_ACM_MTRR_MASK) \
 				<< MTRR_PHYSMASK_SHIFT)
 
-extern void __noreturn dl_stub_entry(u64 architecture,
-				     u64 dce_phys_addr,
-				     u64 dce_size);
+extern void __noreturn dynamic_launch_event(u64 architecture,
+					    u64 dce_phys_addr,
+					    u64 dce_size);
 
 static void dl_txt_setup_acm_mtrrs(u64 base, u32 size)
 {
@@ -180,7 +180,7 @@ static void dl_txt_setup_mtrrs(struct drtm_entry_dce_info *dce_info)
 	native_irq_enable();
 }
 
-void dynamic_launch_event(void *drtm_table)
+void dl_stub_entry(void *drtm_table)
 {
 	struct drtm_entry_architecture *arch_info;
 	struct drtm_entry_dce_info *dce_info;
@@ -214,9 +214,9 @@ void dynamic_launch_event(void *drtm_table)
 	}
 
 	/* Final entry into dynamic launch event code */
-	dl_stub_entry(arch_info->architecture,
-		      dce_info->dce_base,
-		      dce_info->dce_size);
+	dynamic_launch_event(arch_info->architecture,
+			     dce_info->dce_base,
+			     dce_info->dce_size);
 
 	unreachable();
 }

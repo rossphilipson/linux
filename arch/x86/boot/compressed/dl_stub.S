@@ -21,10 +21,10 @@
 #define XAPIC_ENABLE	(1 << 11)
 #define X2APIC_ENABLE	(1 << 10)
 
-#define rva(X) ((X) - dl_stub_entry)
+#define rva(X) ((X) - dynamic_launch_event)
 
 	.code64
-SYM_FUNC_START(dl_stub_entry)
+SYM_FUNC_START(dynamic_launch_event)
 	/*
 	 * On entry:
 	 * - %rdi has the architecture type for the DLE
@@ -105,7 +105,7 @@ SYM_FUNC_START(dl_stub_entry)
 
 .Ldie:
 	ud2
-SYM_FUNC_END(sl_stub_entry)
+SYM_FUNC_END(dynamic_launch_event)
 
 	.data
 	.balign 8
