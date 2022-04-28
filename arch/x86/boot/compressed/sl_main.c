@@ -67,40 +67,6 @@ u32 slaunch_get_cpu_type(void)
 	return sl_cpu_type;
 }
 
-static u64 sl_txt_read(u32 reg)
-{
-	return readq((void *)(u64)(TXT_PRIV_CONFIG_REGS_BASE + reg));
-}
-
-static void sl_txt_write(u32 reg, u64 val)
-{
-	writeq(val, (void *)(u64)(TXT_PRIV_CONFIG_REGS_BASE + reg));
-}
-
-static void __noreturn sl_txt_reset(u64 error)
-{
-	/* Reading the E2STS register acts as a barrier for TXT registers */
-	sl_txt_write(TXT_CR_ERRORCODE, error);
-	sl_txt_read(TXT_CR_E2STS);
-	sl_txt_write(TXT_CR_CMD_UNLOCK_MEM_CONFIG, 1);
-	sl_txt_read(TXT_CR_E2STS);
-	sl_txt_write(TXT_CR_CMD_RESET, 1);
-
-	for ( ; ; )
-		asm volatile ("hlt");
-
-	unreachable();
-}
-
-static u64 sl_rdmsr(u32 reg)
-{
-	u64 lo, hi;
-
-	asm volatile ("rdmsr" : "=a" (lo), "=d" (hi) : "c" (reg));
-
-	return (hi << 32) | lo;
-}
-
 static void sl_check_pmr_coverage(void *base, u32 size, bool allow_hi)
 {
 	struct txt_os_sinit_data *os_sinit_data;

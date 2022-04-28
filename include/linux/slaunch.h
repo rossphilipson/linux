@@ -425,6 +425,51 @@ static inline void *txt_sinit_mle_data_start(void *heap)
 }
 
 /*
+ * Early helper functions (used in Setup Kernel)
+ */
+static inline u64 sl_rdmsr(u32 reg)
+{
+	u64 lo, hi;
+
+	asm volatile ("rdmsr" : "=a" (lo), "=d" (hi) : "c" (reg));
+
+	return (hi << 32) | lo;
+}
+
+static inline void sl_wrmsr(u32 reg, u64 val)
+{
+	u32 lo = val & 0xffffffff;
+	u32 hi = (val >> 32) & 0xffffffff;
+
+	asm volatile("wrmsr" : : "c" (reg), "a" (lo), "d" (hi) : "memory");
+}
+
+static inline u64 sl_txt_read(u32 reg)
+{
+	return readq((void *)(u64)(TXT_PRIV_CONFIG_REGS_BASE + reg));
+}
+
+static inline void sl_txt_write(u32 reg, u64 val)
+{
+	writeq(val, (void *)(u64)(TXT_PRIV_CONFIG_REGS_BASE + reg));
+}
+
+static inline void __noreturn sl_txt_reset(u64 error)
+{
+	/* Reading the E2STS register acts as a barrier for TXT registers */
+	sl_txt_write(TXT_CR_ERRORCODE, error);
+	sl_txt_read(TXT_CR_E2STS);
+	sl_txt_write(TXT_CR_CMD_UNLOCK_MEM_CONFIG, 1);
+	sl_txt_read(TXT_CR_E2STS);
+	sl_txt_write(TXT_CR_CMD_RESET, 1);
+
+	for ( ; ; )
+		asm volatile ("hlt");
+
+	unreachable();
+}
+
+/*
  * TPM event logging functions.
  */
 static inline struct txt_heap_event_log_pointer2_1_element*
