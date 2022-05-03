@@ -13,7 +13,6 @@
 #include <asm/processor-flags.h>
 #include <asm/asm-offsets.h>
 #include <asm/page_types.h>
-#include <asm/apicdef.h>
 #include <linux/drtm_table.h>
 #include <linux/slaunch.h>
 
@@ -64,11 +63,11 @@ SYM_FUNC_START(dynamic_launch_event)
 
 	/* Turn paging off - we are identity mapped so we will survive */
 	movl	%cr0, %eax
-	andl	$~(CR0_PG | CR0_NE | CR0_TS | CR0_MP), %eax
+	andl	$~(X86_CR0_PG | X86_CR0_NE | X86_CR0_TS | X86_CR0_MP), %eax
 	movl	%eax, %cr0
 
 	/* Disable IA-32e mode */
-	movl	$IA32_EFER, %ecx
+	movl	$(MSR_EFER), %ecx
 	rdmsr
 	andb	$~(EFER_LME >> 8), %ah
 	wrmsr
@@ -76,17 +75,17 @@ SYM_FUNC_START(dynamic_launch_event)
 	/* Now in protected mode, prepare pre-launch CPU */
 	movl	%cr0, %eax
 	/* Disable cache */
-	andl	$~CR0_CD, %eax
-	andl	$~CR0_NW, %eax
+	andl	$~(X86_CR0_CD), %eax
+	andl	$~(X86_CR0_NW), %eax
 	/* Native FPU error reporting must be enabled */
-	orl	CR0_NE, %eax
+	orl	$(X86_CR0_NE), %eax
 	movl	%eax, %cr0
 
 	/* Disable virtual-8086 mode just in case */
 	leal	rva(dl_stack_end)(%ebx), %esp
 	pushfl
 	popl	%eax
-	andl	~$(X86_EFLAGS_VM), %eax
+	andl	$~(X86_EFLAGS_VM), %eax
 	pushl	%eax
 	popfl
 
@@ -124,7 +123,6 @@ SYM_DATA_END_LABEL(dl_gdt, SYM_L_LOCAL, dl_gdt_end)
 	.balign 4
 SYM_DATA_START_LOCAL(dl_stack)
 	.fill 4, 1, 0
-SYM_DATA_END_LABEL(dl_scratch_stack, SYM_L_LOCAL, dl_stack_end)
+SYM_DATA_END_LABEL(dl_stack_end, SYM_L_LOCAL, dl_stack_end)
 
 SYM_DATA(dl_apic_base, .long 0x00000000)
-

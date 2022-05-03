@@ -17,11 +17,27 @@
 #define DRTM_NO_SUBTYPE			0x0000
 /* Types 0x0002 - 0x0007 are reserved */
 
-/* DRTM general entries */
+/* DRTM types */
 #define DRTM_ENTRY_ARCHITECTURE		0x0008
 #define DRTM_ENTRY_DCE_INFO		0x0009
 #define DRTM_ENTRY_ENTRYPOINT		0x000a
 #define DRTM_ENTRY_LOG_BUFFER		0x000b
+
+/* DRTM subtypes */
+#define DRTM_DCE_TXT_ACM	1
+#define DRTM_DCE_AMD_SLB	2
+
+#define DRTM_DLME_ENTRYPOINT	1
+#define DRTM_DLE_ENTRYPOINT	2
+
+#define DRTM_TPM12_LOG		1
+#define DRTM_TPM20_LOG		2
+
+/* DRTM architectures */
+#define DRTM_INTEL_TXT		1
+#define DRTM_AMD_SKINIT		2
+
+#ifndef __ASSEMBLY__
 
 struct drtm_entry_hdr {
 	u16 type;
@@ -37,9 +53,6 @@ struct drtm_table_header {
 /*
  * DRTM Architecture Type
  */
-#define DRTM_INTEL_TXT		1
-#define DRTM_AMD_SKINIT		2
-
 struct drtm_entry_architecture {
 	struct drtm_entry_hdr hdr;
 	u16 architecture;
@@ -48,9 +61,6 @@ struct drtm_entry_architecture {
 /*
  * DRTM Dynamic Configuration Environment
  */
-#define DRTM_DCE_TXT_ACM	1
-#define DRTM_DCE_AMD_SLB	2
-
 struct drtm_entry_dce_info {
 	struct drtm_entry_hdr hdr;
 	u64 dce_base;
@@ -60,9 +70,6 @@ struct drtm_entry_dce_info {
 /*
  * DRTM Entry Points
  */
-#define DRTM_DLME_ENTRYPOINT	1
-#define DRTM_DLE_ENTRYPOINT	2
-
 struct drtm_entry_entrypoint {
 	struct drtm_entry_hdr hdr;
 	u64 phys_base;
@@ -71,9 +78,6 @@ struct drtm_entry_entrypoint {
 /*
  * Logging Buffer Types
  */
-#define DRTM_TPM12_LOG		1
-#define DRTM_TPM20_LOG		2
-
 struct drtm_entry_log {
 	struct drtm_entry_hdr hdr;
 	u64 log_base;
@@ -125,5 +129,7 @@ drtm_next_of_type_subtype(struct drtm_entry_hdr *head,
 
 #define drtm_next_of_type(h, e, t) \
 	drtm_next_of_type_subtype(h, e, t, DRTM_NO_SUBTYPE)
+
+#endif /* !__ASSEMBLY */
 
 #endif /* _LINUX_DRTM_TABLE_H */
