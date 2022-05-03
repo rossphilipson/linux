@@ -65,6 +65,6 @@ SYM_DATA_START(mle_header)
 	.long	0x00000000  /* Starting linear address of command line (unused) */
 	.long	0x00000000  /* Ending linear address of command line (unused) */
 	/* Extended fields */
-	.long	rva(dl_stub_entry) /* Linear address of DLE entry point */
+	/*.long	rva(dl_stub_entry)*/ /* Linear address of DLE entry point */
 SYM_DATA_END(mle_header)
 #endif
