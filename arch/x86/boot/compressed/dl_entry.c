@@ -57,7 +57,7 @@ static void dl_txt_setup_acm_mtrrs(u64 base, u32 size)
 	msr = sl_rdmsr(MSR_MTRRcap);
 	vcnt = (msr & MTRR_CAP_VCNT_MASK);
 	for (i = 0; i < vcnt; i++) {
-		msr = rdmsr(MTRRphysMask_MSR(i));
+		msr = sl_rdmsr(MTRRphysMask_MSR(i));
 		msr &= ~(MTRR_PHYS_MASK_VALID);
 		sl_wrmsr(MTRRphysMask_MSR(i), msr);
 	}
@@ -144,14 +144,14 @@ static void dl_txt_setup_mtrrs(struct drtm_entry_dce_info *dce_info)
 	/* Disable interrupts and caching */
 	native_irq_disable();
 
-	cr0 = __read_cr0();
-	__write_cr0((cr0 & ~X86_CR0_NW) | X86_CR0_CD); /* CRO.NW=0 CRO.CD=1 */
+	cr0 = native_read_cr0();
+	native_write_cr0((cr0 & ~X86_CR0_NW) | X86_CR0_CD); /* CRO.NW=0 CRO.CD=1 */
 
 	/* Now flush all caches and disable global pages */
 	wbinvd();
 
-	cr4 = __read_cr4();
-	__write_cr4(cr4 & ~X86_CR4_PGE);
+	cr4 = native_read_cr4();
+	native_write_cr4(cr4 & ~X86_CR4_PGE);
 
 	/* Disable all MTRRs */
 	msr = sl_rdmsr(MSR_MTRRdefType);
@@ -169,12 +169,12 @@ static void dl_txt_setup_mtrrs(struct drtm_entry_dce_info *dce_info)
 	/* Flush all caches again and enable all MTRRs */
 	wbinvd();
 
-	mrs = sl_rdmsr(MSR_MTRRdefType);
+	msr = sl_rdmsr(MSR_MTRRdefType);
 	sl_wrmsr(MSR_MTRRdefType, msr | MTRR_DEF_ENABLE_ALL);
 
-	/* Flush all caches again and restore control registers */
-	__write_cr0(cr0);
-	__write_cr4(cr4);
+	/* Restore control registers */
+	native_write_cr0(cr0);
+	native_write_cr4(cr4);
 
 	/* Reenable interrupts */
 	native_irq_enable();
@@ -185,7 +185,7 @@ void dl_stub_entry(void *drtm_table)
 	struct drtm_entry_architecture *arch_info;
 	struct drtm_entry_dce_info *dce_info;
 
-	arch_info = (struct drtm_entry_architecture_info *)
+	arch_info = (struct drtm_entry_architecture *)
 			drtm_next_of_type(drtm_table, NULL,
 					  DRTM_ENTRY_ARCHITECTURE);
 	if (!arch_info)
@@ -198,8 +198,8 @@ void dl_stub_entry(void *drtm_table)
 	if (!dce_info)
 		sl_txt_reset(DL_ERROR_NO_DRTM_TABLE);
 
-	if (!dce_info->dce_base || dce_info->size)
-		sl_txt_reset(DL_ERROR_DCE_VALUES);
+	if (!dce_info->dce_base || dce_info->dce_size)
+		sl_txt_reset(DL_ERROR_INVALID_DCE_VALUES);
 
 	if (arch_info->architecture == DRTM_INTEL_TXT) {
 		/*

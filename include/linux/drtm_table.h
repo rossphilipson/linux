@@ -41,7 +41,7 @@
 
 struct drtm_entry_hdr {
 	u16 type;
-	u16 sub_type;
+	u16 subtype;
 	u16 size;
 } __packed;
 
@@ -96,9 +96,10 @@ static inline struct drtm_entry_hdr *
 drtm_next_entry(struct drtm_entry_hdr *head,
 		struct drtm_entry_hdr *curr)
 {
-	void *next = curr + curr->len;
+	struct drtm_entry_hdr *next = (struct drtm_entry_hdr *)
+				((u8 *)curr + curr->size);
 
-	if (next >= drtm_end_of_entrys(head))
+	if ((void *)next >= drtm_end_of_entrys(head))
 		return NULL;
 	if (next->type == DRTM_ENTRY_END)
 		return NULL;
@@ -115,7 +116,7 @@ drtm_next_of_type_subtype(struct drtm_entry_hdr *head,
 		entry = head;
 
 	for ( ; ; ) {
-		entry = drtm_next_entry(entry);
+		entry = drtm_next_entry(head, entry);
 		if (!entry)
 			return NULL;
 
