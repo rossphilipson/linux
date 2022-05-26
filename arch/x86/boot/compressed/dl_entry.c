@@ -198,7 +198,7 @@ void dl_stub_entry(void *drtm_table)
 	if (!dce_info)
 		sl_txt_reset(DL_ERROR_NO_DRTM_TABLE);
 
-	if (!dce_info->dce_base || dce_info->dce_size)
+	if (!dce_info->dce_base || !dce_info->dce_size)
 		sl_txt_reset(DL_ERROR_INVALID_DCE_VALUES);
 
 	if (arch_info->architecture == DRTM_INTEL_TXT) {
