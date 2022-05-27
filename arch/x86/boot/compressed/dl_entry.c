@@ -48,6 +48,11 @@ extern void __noreturn dynamic_launch_event(u64 architecture,
 					    u64 dce_phys_addr,
 					    u64 dce_size);
 
+static inline void dl_reset(void)
+{
+	asm volatile ("ud2");
+}
+
 static void dl_txt_setup_acm_mtrrs(u64 base, u32 size)
 {
 	/* Types might be different in Linux */
@@ -103,7 +108,7 @@ static void dl_txt_setup_acm_mtrrs(u64 base, u32 size)
 		base += (mtrr_max_range * PAGE_SIZE);
 
 		if (i == vcnt)
-			sl_txt_reset(DL_ERROR_NUM_MTRRS_EXCEEDED);
+			dl_reset();
 	}
 
 	/* Second loop, setup successively smaller ranges to cover the rest */
@@ -114,7 +119,7 @@ static void dl_txt_setup_acm_mtrrs(u64 base, u32 size)
 		 * the ACM range is all covered.
 		 */
 		if (!mtrr_next_range)
-			sl_txt_reset(DL_ERROR_INVALID_MTRR_MASK);
+			dl_reset();
 
 		mtrr_next_range = 1 << (__fls(npages) - 1);
 
@@ -133,7 +138,7 @@ static void dl_txt_setup_acm_mtrrs(u64 base, u32 size)
 		base += (mtrr_next_range * PAGE_SIZE);
 
 		if (i == vcnt)
-			sl_txt_reset(DL_ERROR_NUM_MTRRS_EXCEEDED);
+			dl_reset();
 	}
 }
 
@@ -209,8 +214,8 @@ void dl_stub_entry(void *drtm_table)
 		 */
 		dl_txt_setup_mtrrs(dce_info);
 	} else {
-		/* Die horribly, AMD support not present yet */
-		asm volatile ("ud2");
+		/* AMD support not present yet */
+		dl_reset();
 	}
 
 	/* Final entry into dynamic launch event code */
