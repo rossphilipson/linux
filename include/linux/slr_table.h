@@ -37,7 +37,7 @@ struct slr_table {
 	u16 revision;
 	u16 architecture;
 	u32 size;
-	u32 max_size
+	u32 max_size;
 	/* entries[] */
 } __packed;
 
@@ -110,8 +110,7 @@ slr_next_entry_by_tag(struct slr_table *table,
 
 static inline int
 slr_add_entry(struct slr_table *table,
-	      struct slr_entry_hdr *entry,
-	      u16 tag)
+	      struct slr_entry_hdr *entry)
 {
 	struct slr_entry_hdr *end;
 
