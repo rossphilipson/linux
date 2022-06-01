@@ -89,9 +89,9 @@ slr_next_entry(struct slr_table *table,
 }
 
 static inline struct slr_entry_hdr *
-slr_next_of_type_subtype(struct slr_table *table,
-			 struct slr_entry_hdr *entry,
-			 u16 tag);
+slr_next_entry_by_tag(struct slr_table *table,
+		      struct slr_entry_hdr *entry,
+		      u16 tag)
 {
 	if (!entry) /* Start from the beginning */
 		entry = (struct slr_entry_hdr *)(((u8 *)table) + sizeof(*table));
@@ -106,6 +106,29 @@ slr_next_of_type_subtype(struct slr_table *table,
 	}
 
 	return NULL;
+}
+
+static inline int
+slr_add_entry(struct slr_table *table,
+	      struct slr_entry_hdr *entry,
+	      u16 tag)
+{
+	struct slr_entry_hdr *end;
+
+	if ((table->size + entry->size) > table->max_size)
+		return -1;
+
+	end = (struct slr_entry_hdr *)((u8 *)table + table->size
+		- sizeof(*end));
+	if (end->tag != SLR_ENTRY_END)
+		return -1; /* malformed table */
+
+	memcpy(end, (u8 *)table + table->size + entry->size, sizeof(*end));
+	memcpy(entry, (u8 *)table + table->size, entry->size);
+	table->size += entry->size;
+
+	return 0;
+
 }
 
 #endif /* !__ASSEMBLY */
