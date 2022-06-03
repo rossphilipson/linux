@@ -23,7 +23,7 @@
 #include <asm/bitops.h>
 #include <asm/efi.h>
 #include <asm/bootparam_utils.h>
-#include <linux/drtm_table.h>
+#include <linux/slr_table.h>
 #include <linux/slaunch.h>
 
 #define SL_ACM_MTRR_MASK	0xffffff  /* ACM requires 36b mask */
@@ -142,7 +142,7 @@ static void dl_txt_setup_acm_mtrrs(u64 base, u32 size)
 	}
 }
 
-static void dl_txt_setup_mtrrs(struct drtm_entry_dce_info *dce_info)
+static void dl_txt_setup_mtrrs(struct slr_entry_dl_info *dl_info)
 {
 	unsigned long cr0, cr4, msr;
 
@@ -169,7 +169,7 @@ static void dl_txt_setup_mtrrs(struct drtm_entry_dce_info *dce_info)
 	sl_wrmsr(MSR_MTRRdefType, msr);
 
 	/* Map the ACM */
-	dl_txt_setup_acm_mtrrs(dce_info->dce_base, dce_info->dce_size);
+	dl_txt_setup_acm_mtrrs(dl_info->dce_base, dl_info->dce_size);
 
 	/* Flush all caches again and enable all MTRRs */
 	wbinvd();
@@ -185,43 +185,34 @@ static void dl_txt_setup_mtrrs(struct drtm_entry_dce_info *dce_info)
 	native_irq_enable();
 }
 
-void dl_stub_entry(void *drtm_table)
+void dl_stub_entry(struct slr_table *slr_table)
 {
-	struct drtm_entry_architecture *arch_info;
-	struct drtm_entry_dce_info *dce_info;
+	struct slr_entry_dl_info *dl_info;
 
-	arch_info = (struct drtm_entry_architecture *)
-			drtm_next_of_type(drtm_table, NULL,
-					  DRTM_ENTRY_ARCHITECTURE);
-	if (!arch_info)
-		sl_txt_reset(DL_ERROR_NO_DRTM_TABLE);
+	dl_info = (struct slr_entry_dl_info *)
+		slr_next_entry_by_tag(slr_table, NULL, SLR_ENTRY_DL_INFO);
+	if (!dl_info)
+		dl_reset();
 
-	dce_info = (struct drtm_entry_dce_info *)
-			drtm_next_of_type_subtype(drtm_table, NULL,
-						  DRTM_ENTRY_DCE_INFO,
-						  DRTM_DCE_TXT_ACM);
-	if (!dce_info)
-		sl_txt_reset(DL_ERROR_NO_DRTM_TABLE);
+	if (!dl_info->dce_base || !dl_info->dce_size)
+		dl_reset();
 
-	if (!dce_info->dce_base || !dce_info->dce_size)
-		sl_txt_reset(DL_ERROR_INVALID_DCE_VALUES);
-
-	if (arch_info->architecture == DRTM_INTEL_TXT) {
+	if (slr_table->architecture == SLR_INTEL_TXT) {
 		/*
 		 * Set ACM memory to WB and all other to UC. Note all
 		 * MTRRs have been saved in the TXT heap for restoration
 		 * after SENTER
 		 */
-		dl_txt_setup_mtrrs(dce_info);
+		dl_txt_setup_mtrrs(dl_info);
 	} else {
 		/* AMD support not present yet */
 		dl_reset();
 	}
 
 	/* Final entry into dynamic launch event code */
-	dynamic_launch_event(arch_info->architecture,
-			     dce_info->dce_base,
-			     dce_info->dce_size);
+	dynamic_launch_event(slr_table->architecture,
+			     dl_info->dce_base,
+			     dl_info->dce_size);
 
 	unreachable();
 }
