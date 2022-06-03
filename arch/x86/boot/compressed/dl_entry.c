@@ -16,7 +16,6 @@
 #include <asm/mtrr.h>
 #include <asm/msr-index.h>
 #include <asm/processor-flags.h>
-#include <asm/special_insns.h>
 #include <asm/asm-offsets.h>
 #include <asm/bootparam.h>
 #include <asm/mtrr.h>
@@ -51,6 +50,30 @@ extern void __noreturn dynamic_launch_event(u64 architecture,
 static inline void dl_reset(void)
 {
 	asm volatile ("ud2");
+}
+
+static inline unsigned long dl_read_cr0(void)
+{
+	unsigned long val;
+	asm volatile("mov %%cr0,%0\n\t" : "=r" (val));
+	return val;
+}
+
+static inline void dl_write_cr0(unsigned long val)
+{
+	asm volatile("mov %0,%%cr0\n\t" : : "r" (val));
+}
+
+static inline unsigned long dl_read_cr4(void)
+{
+	unsigned long val;
+	asm volatile("mov %%cr4,%0\n\t" : "=r" (val));
+	return val;
+}
+
+static inline void dl_write_cr4(unsigned long val)
+{
+	asm volatile("mov %0,%%cr4\n\t" : : "r" (val));
 }
 
 static void dl_txt_setup_acm_mtrrs(u64 base, u32 size)
@@ -149,14 +172,14 @@ static void dl_txt_setup_mtrrs(struct slr_entry_dl_info *dl_info)
 	/* Disable interrupts and caching */
 	native_irq_disable();
 
-	cr0 = native_read_cr0();
-	native_write_cr0((cr0 & ~X86_CR0_NW) | X86_CR0_CD); /* CRO.NW=0 CRO.CD=1 */
+	cr0 = dl_read_cr0();
+	dl_write_cr0((cr0 & ~X86_CR0_NW) | X86_CR0_CD); /* CRO.NW=0 CRO.CD=1 */
 
 	/* Now flush all caches and disable global pages */
-	wbinvd();
+	native_wbinvd();
 
-	cr4 = native_read_cr4();
-	native_write_cr4(cr4 & ~X86_CR4_PGE);
+	cr4 = dl_read_cr4();
+	dl_write_cr4(cr4 & ~X86_CR4_PGE);
 
 	/* Disable all MTRRs */
 	msr = sl_rdmsr(MSR_MTRRdefType);
@@ -172,14 +195,14 @@ static void dl_txt_setup_mtrrs(struct slr_entry_dl_info *dl_info)
 	dl_txt_setup_acm_mtrrs(dl_info->dce_base, dl_info->dce_size);
 
 	/* Flush all caches again and enable all MTRRs */
-	wbinvd();
+	native_wbinvd();
 
 	msr = sl_rdmsr(MSR_MTRRdefType);
 	sl_wrmsr(MSR_MTRRdefType, msr | MTRR_DEF_ENABLE_ALL);
 
 	/* Restore control registers */
-	native_write_cr0(cr0);
-	native_write_cr4(cr4);
+	dl_write_cr0(cr0);
+	dl_write_cr4(cr4);
 
 	/* Reenable interrupts */
 	native_irq_enable();
