@@ -80,7 +80,7 @@ static void dl_txt_setup_acm_mtrrs(u64 base, u32 size)
 {
 	/* Types might be different in Linux */
 	u64 msr, mtrr_max_range, mtrr_next_range;
-	u32 base_bsf, vcnt, npages, i, j;
+	u32 base_bsf, vcnt, npages, i, j, n = 0;
 
 	msr = sl_rdmsr(MSR_MTRRcap);
 	vcnt = (msr & MTRR_CAP_VCNT_MASK);
@@ -116,21 +116,21 @@ static void dl_txt_setup_acm_mtrrs(u64 base, u32 size)
 
 	/* First loop, set up MTRR ranges using the max range */
  	while (npages >= mtrr_max_range) {
-		msr = sl_rdmsr(MTRRphysBase_MSR(i));
+		msr = sl_rdmsr(MTRRphysBase_MSR(n));
 		msr |= MTRRphysBaseVal(base);
 		msr |= (MTRR_TYPE_WRBACK & MTRR_MEMTYPE_MASK);
-		sl_wrmsr(MTRRphysBase_MSR(i), msr);
+		sl_wrmsr(MTRRphysBase_MSR(n), msr);
 
-		msr = sl_rdmsr(MTRRphysMask_MSR(i));
+		msr = sl_rdmsr(MTRRphysMask_MSR(n));
 		msr |= MTRRphysMaskVal(mtrr_max_range);
 		msr |= MTRR_VALID_BIT;
-		sl_wrmsr(MTRRphysMask_MSR(i), msr);
+		sl_wrmsr(MTRRphysMask_MSR(n), msr);
 
-		i++;
+		n++;
 		npages -= mtrr_max_range;
 		base += (mtrr_max_range * PAGE_SIZE);
 
-		if (i == vcnt)
+		if (n == vcnt)
 			dl_reset();
 	}
 
@@ -146,21 +146,21 @@ static void dl_txt_setup_acm_mtrrs(u64 base, u32 size)
 
 		mtrr_next_range = 1 << (__fls(npages) - 1);
 
-		msr = sl_rdmsr(MTRRphysBase_MSR(i));
+		msr = sl_rdmsr(MTRRphysBase_MSR(n));
 		msr |= MTRRphysBaseVal(base);
 		msr |= (MTRR_TYPE_WRBACK & MTRR_MEMTYPE_MASK);
-		sl_wrmsr(MTRRphysBase_MSR(i), msr);
+		sl_wrmsr(MTRRphysBase_MSR(n), msr);
 
-		msr = sl_rdmsr(MTRRphysMask_MSR(i));
+		msr = sl_rdmsr(MTRRphysMask_MSR(n));
 		msr |= MTRRphysMaskVal(mtrr_next_range);
 		msr |= MTRR_VALID_BIT;
-		sl_wrmsr(MTRRphysMask_MSR(i), msr);
+		sl_wrmsr(MTRRphysMask_MSR(n), msr);
 
-		i++;
+		n++;
 		npages -= mtrr_next_range;
 		base += (mtrr_next_range * PAGE_SIZE);
 
-		if (i == vcnt)
+		if (n == vcnt)
 			dl_reset();
 	}
 }
