@@ -13,7 +13,7 @@
 #include <asm/processor-flags.h>
 #include <asm/asm-offsets.h>
 #include <asm/page_types.h>
-#include <linux/drtm_table.h>
+#include <linux/slr_table.h>
 #include <linux/slaunch.h>
 
 /* Can't include apiddef.h in asm */
@@ -55,11 +55,11 @@ SYM_FUNC_START(dynamic_launch_event)
 
 	/* Load known data segment descritor */
 	movl	$__SL32_DS, %eax
-	movl	%eax, %ds
-	movl	%eax, %es
-	movl	%eax, %fs
-	movl	%eax, %gs
-	movl	%eax, %ss
+	movw	%ax, %ds
+	movw	%ax, %es
+	movw	%ax, %fs
+	movw	%ax, %gs
+	movw	%ax, %ss
 
 	/* Turn paging off - we are identity mapped so we will survive */
 	movl	%cr0, %eax
@@ -72,11 +72,11 @@ SYM_FUNC_START(dynamic_launch_event)
 	andb	$~(EFER_LME >> 8), %ah
 	wrmsr
 
+	/* Disable PAE for straight 32b mode */
 	mov	%cr4, %eax
 	and	$~(X86_CR4_PAE), %eax
 	mov	%eax, %cr4
 
-	/* Now in protected mode, prepare pre-launch CPU */
 	movl	%cr0, %eax
 	/* Disable cache */
 	andl	$~(X86_CR0_CD), %eax
@@ -93,10 +93,11 @@ SYM_FUNC_START(dynamic_launch_event)
 	pushl	%eax
 	popfl
 
+	/* Now in protected mode, prepare pre-launch CPU */
 	/* MCE setup was done in the bootloader preamble code */
 
 	/* The DL Event */
-	testl	$(DRTM_INTEL_TXT), %edi
+	testl	$(SLR_INTEL_TXT), %edi
 	jz	.Ldie /* AMD/SKINIT support here yet */
 
 	/* Intel/TXT GETSEC[SENTER] */
