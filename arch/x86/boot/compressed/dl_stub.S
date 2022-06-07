@@ -72,6 +72,10 @@ SYM_FUNC_START(dynamic_launch_event)
 	andb	$~(EFER_LME >> 8), %ah
 	wrmsr
 
+	mov	%cr4, %eax
+	and	$~(X86_CR4_PAE), %eax
+	mov	%eax, %cr4
+
 	/* Now in protected mode, prepare pre-launch CPU */
 	movl	%cr0, %eax
 	/* Disable cache */
