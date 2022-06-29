@@ -36,7 +36,6 @@ SYM_FUNC_START(dynamic_launch_event)
 1:	popq	%rbx
 	subq	$rva(1b), %rbx
 
-
 	/* Load GDT for protected mode, still using existing long mode GDT */
 	leal	rva(dl_gdt_desc)(%ebx), %eax
 	addl	%eax, 2(%eax)
@@ -77,10 +76,10 @@ SYM_FUNC_START(dynamic_launch_event)
 	and	$~(X86_CR4_PAE), %eax
 	mov	%eax, %cr4
 
+	/* Now in protected mode, prepare pre-launch CPU */
 	movl	%cr0, %eax
 	/* Disable cache */
-	andl	$~(X86_CR0_CD), %eax
-	andl	$~(X86_CR0_NW), %eax
+	andl	$~(X86_CR0_CD | X86_CR0_NW), %eax
 	/* Native FPU error reporting must be enabled */
 	orl	$(X86_CR0_NE), %eax
 	movl	%eax, %cr0
@@ -93,7 +92,6 @@ SYM_FUNC_START(dynamic_launch_event)
 	pushl	%eax
 	popfl
 
-	/* Now in protected mode, prepare pre-launch CPU */
 	/* MCE setup was done in the bootloader preamble code */
 
 	/* The DL Event */
