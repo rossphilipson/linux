@@ -32,14 +32,42 @@ struct class *tpm_class;
 struct class *tpmrm_class;
 dev_t tpm_devt;
 
+bool locality2 = true;
+
+static int __init tpm_set_locality2(char *str)
+{
+	bool pt;
+	int ret;
+
+	ret = kstrtobool(str, &pt);
+	if (ret)
+		return ret;
+
+	if (pt)
+		locality2 = true;
+	else
+		locality2 = false;
+
+	return 0;
+}
+early_param("tpm.set_locality2", tpm_set_locality2);
+
 static int tpm_request_locality(struct tpm_chip *chip)
 {
-	int rc;
+	int rc, locality;
 
 	if (!chip->ops->request_locality)
 		return 0;
 
-	rc = chip->ops->request_locality(chip, 0);
+	if (locality2) {
+		locality = 2;
+		printk("***RJP*** TPM set locality 2\n");
+	} else {
+		locality = 0;
+		printk("***RJP*** TPM set locality 0\n");
+	}
+
+	rc = chip->ops->request_locality(chip, locality);
 	if (rc < 0)
 		return rc;
 
