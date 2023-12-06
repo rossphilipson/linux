@@ -148,6 +148,86 @@ static int wait_startup(struct tpm_chip *chip, int l)
 	return -1;
 }
 
+static void tpm_tis_dump_localities(struct tpm_chip *chip)
+{
+	struct tpm_tis_data *priv = dev_get_drvdata(&chip->dev);
+	int i, rc;
+	u8 access;
+	u16 localities = 0;
+
+	for ( i=0; i<=4; i++ ) {
+		rc = tpm_tis_read8(priv, TPM_ACCESS(i), &access);
+		pr_notice("***RJP*** tpm register value: %2.2x\n", access);
+
+		if (rc < 0) {
+			pr_err("***RJP*** error reading locality %i tpm register\n", i);
+			continue;
+		}
+
+		if ( ! (access & TPM_ACCESS_VALID) ) {
+			pr_err("***RJP*** locality %i tpm register not in valid state\n", i);
+			continue;
+		}
+
+		if ( access & TPM_ACCESS_REQUEST_PENDING ) {
+			if ( access & TPM_ACCESS_REQUEST_USE ) {
+				pr_notice("***RJP*** tpm register pending request: %i\n", i);
+				localities |= 1 << (i + 8);
+			}
+		}
+
+		if ( access & TPM_ACCESS_ACTIVE_LOCALITY ) {
+			pr_notice("***RJP*** tpm register active locality: %i\n", i);
+			localities |= 1 << i;
+		}
+	}
+
+	pr_notice("***RJP*** locality state: %x\n", localities);
+}
+
+bool dump_localities = false;
+
+static int __init tpm_dump_localities(char *str)
+{
+	bool pt;
+	int ret;
+
+	ret = kstrtobool(str, &pt);
+	if (ret)
+		return ret;
+
+	if (pt)
+		dump_localities = true;
+	else
+		dump_localities = false;
+
+	return 0;
+}
+early_param("tpm.dump_localities", tpm_dump_localities);
+
+bool request_locality2 = false;
+
+static int __init tpm_request_locality2(char *str)
+{
+	bool pt;
+	int ret;
+
+	ret = kstrtobool(str, &pt);
+	if (ret)
+		return ret;
+
+	if (pt)
+		request_locality2 = true;
+	else
+		request_locality2 = false;
+
+	return 0;
+}
+early_param("tpm.request_locality2", tpm_request_locality2);
+
+static bool first_read = 0;
+static u8 last_access = 0;
+
 static bool check_locality(struct tpm_chip *chip, int l)
 {
 	struct tpm_tis_data *priv = dev_get_drvdata(&chip->dev);
@@ -158,10 +238,29 @@ static bool check_locality(struct tpm_chip *chip, int l)
 	if (rc < 0)
 		return false;
 
+	if (!first_read) {
+		first_read = true;
+		last_access = access;
+		printk("***RJP*** First access:   %2.2x  for locality: %d\n", access, l);
+	}
+
+	if (access != last_access) {
+		last_access = access;
+		printk("***RJP*** Changed access: %2.2x  for locality: %d\n", access, l);
+	}
+
+	if (dump_localities) {
+		printk("***RJP*** check_locality() - registers:\n");
+		tpm_tis_dump_localities(chip);
+	}
+
 	if ((access & (TPM_ACCESS_ACTIVE_LOCALITY | TPM_ACCESS_VALID
 		       | TPM_ACCESS_REQUEST_USE)) ==
 	    (TPM_ACCESS_ACTIVE_LOCALITY | TPM_ACCESS_VALID)) {
 		priv->locality = l;
+
+		printk("***RJP*** chip->locality: %d priv->locality: %d\n", chip->locality, priv->locality);
+
 		return true;
 	}
 
@@ -1219,6 +1318,18 @@ int tpm_tis_core_init(struct device *dev, struct tpm_tis_data *priv, int irq,
 	tpm_tis_write32(priv, TPM_INT_ENABLE(priv->locality), intmask);
 	tpm_tis_relinquish_locality(chip, 0);
 
+	if (request_locality2) {
+		rc = tpm_tis_request_locality(chip, 2);
+		if (rc < 0) {
+			printk("***RJP*** request locality 2 failed - 1x\n");
+			rc = -ENODEV;
+			goto out_err;
+		}
+
+		tpm_tis_relinquish_locality(chip, 2);
+		printk("***RJP*** request and release locality 2 - 1x\n");
+	}
+
 	rc = tpm_chip_start(chip);
 	if (rc)
 		goto out_err;
@@ -1234,6 +1345,26 @@ int tpm_tis_core_init(struct device *dev, struct tpm_tis_data *priv, int irq,
 	dev_info(dev, "%s TPM (device-id 0x%X, rev-id %d)\n",
 		 (chip->flags & TPM_CHIP_FLAG_TPM2) ? "2.0" : "1.2",
 		 vendor >> 16, rid);
+
+	if (request_locality2) {
+		rc = tpm_tis_request_locality(chip, 2);
+		if (rc < 0) {
+			printk("***RJP*** request locality 2 failed - 2x\n");
+			rc = -ENODEV;
+			goto out_err;
+		}
+
+		rc = tpm_tis_read8(priv, TPM_RID(2), &rid);
+		if (rc < 0)
+			goto out_err;
+
+		printk("%s ***RJP*** TPM (device-id 0x%X, rev-id %d) - 2x\n",
+			 (chip->flags & TPM_CHIP_FLAG_TPM2) ? "2.0" : "1.2",
+			 vendor >> 16, rid);
+
+		tpm_tis_relinquish_locality(chip, 2);
+		printk("***RJP*** request and release locality 2 - 2x\n");
+	}
 
 	probe = probe_itpm(chip);
 	if (probe < 0) {

@@ -37,18 +37,67 @@ const struct class tpmrm_class = {
 };
 dev_t tpm_devt;
 
+bool locality2 = true;
+
+static int __init tpm_set_locality2(char *str)
+{
+	bool pt;
+	int ret;
+
+	ret = kstrtobool(str, &pt);
+	if (ret)
+		return ret;
+
+	if (pt)
+		locality2 = true;
+	else
+		locality2 = false;
+
+	return 0;
+}
+early_param("tpm.set_locality2", tpm_set_locality2);
+
+bool force_locality0 = false;
+
+static int __init tpm_force_locality0(char *str)
+{
+	bool pt;
+	int ret;
+
+	ret = kstrtobool(str, &pt);
+	if (ret)
+		return ret;
+
+	if (pt)
+		force_locality0 = true;
+	else
+		force_locality0 = false;
+
+	return 0;
+}
+early_param("tpm.force_locality0", tpm_force_locality0);
+
 static int tpm_request_locality(struct tpm_chip *chip)
 {
-	int rc;
+	int rc, locality;
 
 	if (!chip->ops->request_locality)
 		return 0;
 
-	rc = chip->ops->request_locality(chip, 0);
+	if (locality2 && !force_locality0) {
+		locality = 2;
+		printk("***RJP*** TPM set locality 2\n");
+	} else {
+		locality = 0;
+		printk("***RJP*** TPM set locality 0\n");
+	}
+
+	rc = chip->ops->request_locality(chip, locality);
 	if (rc < 0)
 		return rc;
 
 	chip->locality = rc;
+	printk("***RJP*** in request - chip->locality: %d\n", chip->locality);
 	return 0;
 }
 
@@ -58,6 +107,8 @@ static void tpm_relinquish_locality(struct tpm_chip *chip)
 
 	if (!chip->ops->relinquish_locality)
 		return;
+
+	printk("***RJP*** in relinquish - chip->locality: %d\n", chip->locality);
 
 	rc = chip->ops->relinquish_locality(chip, chip->locality);
 	if (rc)
