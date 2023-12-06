@@ -116,6 +116,66 @@ static int wait_startup(struct tpm_chip *chip, int l)
 	return -1;
 }
 
+static void tpm_tis_dump_localities(struct tpm_chip *chip)
+{
+	struct tpm_tis_data *priv = dev_get_drvdata(&chip->dev);
+	int i, rc;
+	u8 access;
+	u16 localities = 0;
+
+	for ( i=0; i<=4; i++ ) {
+		rc = tpm_tis_read8(priv, TPM_ACCESS(i), &access);
+		pr_notice("***RJP*** tpm register value: %2.2x\n", access);
+
+		if (rc < 0) {
+			pr_err("***RJP*** error reading locality %i tpm register\n", i);
+			continue;
+		}
+
+		if ( ! (access & TPM_ACCESS_VALID) ) {
+			pr_err("***RJP*** locality %i tpm register not in valid state\n", i);
+			continue;
+		}
+
+		if ( access & TPM_ACCESS_REQUEST_PENDING ) {
+			if ( access & TPM_ACCESS_REQUEST_USE ) {
+				pr_notice("***RJP*** tpm register pending request: %i\n", i);
+				localities |= 1 << (i + 8);
+			}
+		}
+
+		if ( access & TPM_ACCESS_ACTIVE_LOCALITY ) {
+			pr_notice("***RJP*** tpm register active locality: %i\n", i);
+			localities |= 1 << i;
+		}
+	}
+
+	pr_notice("***RJP*** locality state: %x\n", localities);
+}
+
+bool dump_localities = false;
+
+static int __init tpm_dump_localities(char *str)
+{
+	bool pt;
+	int ret;
+
+	ret = kstrtobool(str, &pt);
+	if (ret)
+		return ret;
+
+	if (pt)
+		dump_localities = true;
+	else
+		dump_localities = false;
+
+	return 0;
+}
+early_param("tpm.dump_localities", tpm_dump_localities);
+
+static bool first_read = 0;
+static u8 last_access = 0;
+
 static bool check_locality(struct tpm_chip *chip, int l)
 {
 	struct tpm_tis_data *priv = dev_get_drvdata(&chip->dev);
@@ -126,10 +186,29 @@ static bool check_locality(struct tpm_chip *chip, int l)
 	if (rc < 0)
 		return false;
 
+	if (!first_read) {
+		first_read = true;
+		last_access = access;
+		printk("***RJP*** First access:   %2.2x  for locality: %d\n", access, l);
+	}
+
+	if (access != last_access) {
+		last_access = access;
+		printk("***RJP*** Changed access: %2.2x  for locality: %d\n", access, l);
+	}
+
+	if (dump_localities) {
+		printk("***RJP*** check_locality() - registers:\n");
+		tpm_tis_dump_localities(chip);
+	}
+
 	if ((access & (TPM_ACCESS_ACTIVE_LOCALITY | TPM_ACCESS_VALID
 		       | TPM_ACCESS_REQUEST_USE)) ==
 	    (TPM_ACCESS_ACTIVE_LOCALITY | TPM_ACCESS_VALID)) {
 		priv->locality = l;
+
+		printk("***RJP*** chip->locality: %d priv->locality: %d\n", chip->locality, priv->locality);
+
 		return true;
 	}
 
