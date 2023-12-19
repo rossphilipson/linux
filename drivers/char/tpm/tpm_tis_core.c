@@ -279,13 +279,25 @@ again:
 static int tpm_tis_request_locality(struct tpm_chip *chip, int l)
 {
 	struct tpm_tis_data *priv = dev_get_drvdata(&chip->dev);
-	int ret = 0;
+	int ret = TPM_MAX_LOCALITY;
+
+	if (l >= TPM_MAX_LOCALITY)
+		return -1;
 
 	mutex_lock(&priv->locality_count_mutex);
-	if (priv->locality_count == 0)
+	if (priv->locality_count == 0) {
 		ret = __tpm_tis_request_locality(chip, l);
-	if (!ret)
-		priv->locality_count++;
+		if (ret >= 0)
+			priv->locality_count++;
+	}
+	if (ret == TPM_MAX_LOCALITY) {
+		/*
+		 * Since the locality was not changed, return the current
+		 * private locality since the caller is expecting a locality
+		 * number to be returned on succes.
+		 */
+		ret = priv->locality;
+	}
 	mutex_unlock(&priv->locality_count_mutex);
 	return ret;
 }
