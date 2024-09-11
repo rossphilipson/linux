@@ -212,6 +212,16 @@ static void sl_find_drtm_event_log(struct slr_table *slrt)
 	/* If found, this implies TPM2 log and family */
 	if (log21_elem)
 		tpm_log_ver = SL_TPM2_LOG;
+
+	/*
+	 * If this configuration setting is enabled, do not allow the launch
+	 * to proceed if an older (version 1) TPM is being used as this only
+	 * supports doing SHA-1 hashes.
+	 */
+#if (IS_ENABLED(CONFIG_SECURE_LAUNCH_NO_SHA1))
+	if (tpm_log_ver == SL_TPM_LOG)
+		sl_txt_reset(SL_ERROR_NO_SHA1);
+#endif
 }
 
 static void sl_validate_event_log_buffer(void)
@@ -262,11 +272,25 @@ static void sl_find_event_log_algorithms(void)
 					log21_elem->first_record_offset +
 					sizeof(struct tcg_pcr_event));
 
-	if (efi_head->num_algs == 0 || efi_head->num_algs > 2)
+	if (efi_head->num_algs == 0 || efi_head->num_algs > SL_TPM2_MAX_ALGS)
 		sl_txt_reset(SL_ERROR_TPM_NUMBER_ALGS);
 
 	memcpy(&tpm_algs[0], &efi_head->digest_sizes[0],
 	       sizeof(struct tcg_efi_specid_event_algs) * efi_head->num_algs);
+
+	/*
+	 * If this configuration setting is enabled, do not allow the launch
+	 * to proceed if the TPM has SHA-1 banks enable and in use.
+	 */
+#if (IS_ENABLED(CONFIG_SECURE_LAUNCH_NO_SHA1))
+	{
+		u32 alg_idx;
+
+		for (alg_idx = 0; alg_idx < SL_TPM2_MAX_ALGS; alg_idx++)
+			if (tpm_algs[alg_idx].alg_id == TPM_ALG_SHA1)
+				sl_txt_reset(SL_ERROR_NO_SHA1);
+	}
+#endif
 }
 
 static void sl_tpm_log_event(u32 pcr, u32 event_type,

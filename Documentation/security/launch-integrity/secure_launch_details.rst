@@ -16,7 +16,10 @@ The settings to enable Secure Launch using Kconfig are under::
   "Processor type and features" --> "Secure Launch support"
 
 A kernel with this option enabled can still be booted using other supported
-methods.
+methods. The following additional setting will prevent Secure Launch from
+performing a launch if the TPM SHA-1 algorithm banks are enabled and in use::
+
+  "Processor type and features" --> "Secure Launch support" -> "Secure Launch no SHA1 support"
 
 To reduce the Trusted Computing Base (TCB) of the MLE [1]_, the build
 configuration should be pared down as narrowly as one's use case allows.
@@ -427,14 +430,16 @@ The PMR values are set by the pre-launch environment, so the issue most likely
 originates there. It could also be the sign of an attempted attack.
 
 ======  =======================
-Name:   SL_ERROR_INITRD_TOO_BIG
+Name:   SL_ERROR_NO_SHA1
 Value:  0xc0008018
 ======  =======================
 
 Description:
 
-The external initrd provided is larger than 4Gb. This is not a valid
-configuration for a Secure Launch due to managing DMA protection.
+Secure Launch provides a configuration setting (SECURE_LAUNCH_NO_SHA1) that
+prevents the launch from continuing if the TPM is configured to use SHA-1
+algorithm banks. If this condition is detected, Secure Launch will reset
+the platform and set this TXT error code.
 
 ======  =========================
 Name:   SL_ERROR_HEAP_ZERO_OFFSET

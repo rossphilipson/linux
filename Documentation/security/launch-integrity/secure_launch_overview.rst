@@ -205,6 +205,12 @@ the system integrator (whether that be the OEM, employer, distro maintainer,
 system administrator, or end user) chooses to use older hardware that only has
 a TPM 1.2 chip, then they are accepting the risk it creates in their solution.
 
+.. note::
+    Secure Launch provides a configuration setting (SECURE_LAUNCH_NO_SHA1) that
+    prevents the launch from continuing if the TPM is configured to use SHA-1
+    algorithm banks. If this condition is detected, Secure Launch will reset
+    the platform and set the TXT error code SL_ERROR_NO_SHA1.
+
 Resources
 =========
 

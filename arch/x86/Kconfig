@@ -2079,6 +2079,13 @@ config SECURE_LAUNCH
 	   continues the measurement chain over kernel configuration
 	   information and init images.
 
+config SECURE_LAUNCH_NO_SHA1
+	bool "Secure Launch no SHA1 support"
+	depends on SECURE_LAUNCH
+	help
+	   When enabled, Secure Launch will abort the launch if TPM SHA-1
+	   algorithm banks are enabled and in use.
+
 source "kernel/Kconfig.hz"
 
 config ARCH_SUPPORTS_KEXEC
