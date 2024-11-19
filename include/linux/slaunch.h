@@ -29,11 +29,11 @@
  * Intel SMX provides a programming interface to establish a Measured Launched
  * Environment (MLE). The measurement and protection mechanisms supported by the
  * capabilities of an Intel Trusted Execution Technology (TXT) platform. SMX is
- * the processor’s programming interface in an Intel TXT platform.
+ * the processor's programming interface in an Intel TXT platform.
  *
  * See:
  *   Intel SDM Volume 2 - 6.1 "Safer Mode Extensions Reference"
- *   Intel Trusted Execution Technology - Measured Launch Environment Developer’s Guide
+ *   Intel Trusted Execution Technology - Measured Launch Environment Developer's Guide
  */
 
 /*
