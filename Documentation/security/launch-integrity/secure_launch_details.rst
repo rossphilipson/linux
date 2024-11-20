@@ -124,7 +124,6 @@ Appendix B of the TrenchBoot Secure Launch Specification::
         struct txt_os_mle_data {
                 u32 version;
                 u32 reserved;
-                u64 boot_params_addr;
                 u64 slrt;
                 u64 txt_info;
                 u32 ap_wake_block;
@@ -138,7 +137,6 @@ Description of structure:
 Field                  Use
 =====================  ========================================================================
 version                Structure version, current value 1
-boot_params_addr       Physical base address of the Linux boot parameters
 slrt                   Physical address of the Secure Launch Resource Table
 txt_info               Pointer into the SLRT for easily locating TXT specific table
 ap_wake_block          Physical address of the block of memory for parking APs after a launch
