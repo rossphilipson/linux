@@ -13,6 +13,7 @@
 
 #include "tpm.h"
 #include <crypto/hash_info.h>
+#include <linux/debug_print.h>
 
 static bool disable_pcr_integrity;
 module_param(disable_pcr_integrity, bool, 0444);
@@ -274,6 +275,53 @@ int tpm2_pcr_extend(struct tpm_chip *chip, u32 pcr_idx,
 	tpm_buf_destroy(&buf);
 
 	return rc;
+}
+
+int tpm2_pcr_event(struct tpm_chip *chip, u32 pcr_idx,
+		   u8 *event_data, u32 event_size)
+{
+	struct tpm_buf buf;
+	int rc;
+
+	if (!disable_pcr_integrity) {
+		rc = tpm2_start_auth_session(chip);
+		if (rc)
+			return rc;
+	}
+
+	rc = tpm_buf_init(&buf, TPM2_ST_SESSIONS, TPM2_CC_PCR_EVENT);
+	if (rc) {
+		if (!disable_pcr_integrity)
+			tpm2_end_auth_session(chip);
+		return rc;
+	}
+
+	if (!disable_pcr_integrity) {
+		tpm_buf_append_name(chip, &buf, pcr_idx, NULL);
+		tpm_buf_append_hmac_session(chip, &buf, 0, NULL, 0);
+	} else {
+		tpm_buf_append_handle(chip, &buf, pcr_idx);
+		tpm_buf_append_auth(chip, &buf, 0, NULL, 0);
+	}
+
+	tpm_buf_append_u16(&buf, event_size);
+	tpm_buf_append(&buf, (const unsigned char *)event_data, event_size);
+
+	printd_str("***RJP*** PCR_Event size:");
+	printd_hex(event_size);
+	printd_str("\n");
+	dump_hex(event_data, event_size);
+	printd_str("***RJP*** ========================================================\n");
+
+	if (!disable_pcr_integrity)
+		tpm_buf_fill_hmac_session(chip, &buf);
+	rc = tpm_transmit_cmd(chip, &buf, 0, "attempting to send PCR event");
+	if (!disable_pcr_integrity)
+		rc = tpm_buf_check_hmac_response_debug(chip, &buf, rc);
+
+	tpm_buf_destroy(&buf);
+
+	return 0;
 }
 
 struct tpm2_get_random_out {

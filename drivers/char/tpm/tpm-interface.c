@@ -343,6 +343,29 @@ out:
 }
 EXPORT_SYMBOL_GPL(tpm_pcr_extend);
 
+int tpm_pcr_event(struct tpm_chip *chip, u32 pcr_idx,
+		  u8 *event_data, u32 event_size)
+{
+	int rc;
+
+	chip = tpm_find_get_ops(chip);
+	if (!chip)
+		return -ENODEV;
+
+	//if (chip->flags & TPM_CHIP_FLAG_TPM2) {
+		rc = tpm2_pcr_event(chip, pcr_idx, event_data, event_size);
+	//	goto out;
+	//}
+
+	//rc = tpm1_pcr_extend(chip, pcr_idx, digests[0].digest,
+	//		     "attempting extend a PCR value");
+
+//out:
+	tpm_put_ops(chip);
+	return rc;
+}
+EXPORT_SYMBOL_GPL(tpm_pcr_event);
+
 int tpm_auto_startup(struct tpm_chip *chip)
 {
 	int rc;

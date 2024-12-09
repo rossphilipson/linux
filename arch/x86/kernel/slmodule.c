@@ -472,6 +472,7 @@ next:
 
 static void slaunch_pcr_extend(void __iomem *txt)
 {
+	static bool once = false;
 	struct tpm_chip *tpm;
 	int rc;
 
@@ -489,6 +490,12 @@ static void slaunch_pcr_extend(void __iomem *txt)
 		slaunch_tpm2_extend(tpm, txt);
 	else
 		slaunch_tpm_extend(tpm, txt);
+
+	if (!once) {
+		rc = tpm_pcr_event(tpm, 17, "TESTMETESTME", strlen("TESTMETESTME"));
+		pr_err("***RJP*** PCR_Event call, result: %d\n", rc);
+		once = true;
+	}
 }
 
 static int __init slaunch_module_init(void)

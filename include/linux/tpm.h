@@ -272,6 +272,7 @@ enum tpm2_command_codes {
 	TPM2_CC_HIERARCHY_CONTROL       = 0x0121,
 	TPM2_CC_HIERARCHY_CHANGE_AUTH   = 0x0129,
 	TPM2_CC_CREATE_PRIMARY          = 0x0131,
+	TPM2_CC_PCR_EVENT	        = 0x013C,
 	TPM2_CC_SEQUENCE_COMPLETE       = 0x013E,
 	TPM2_CC_SELF_TEST	        = 0x0143,
 	TPM2_CC_STARTUP		        = 0x0144,
@@ -457,6 +458,8 @@ extern int tpm_pcr_read(struct tpm_chip *chip, u32 pcr_idx,
 			struct tpm_digest *digest);
 extern int tpm_pcr_extend(struct tpm_chip *chip, u32 pcr_idx,
 			  struct tpm_digest *digests);
+extern int tpm_pcr_event(struct tpm_chip *chip, u32 pcr_idx,
+			 u8 *event_data, u32 event_size);
 extern int tpm_get_random(struct tpm_chip *chip, u8 *data, size_t max);
 extern struct tpm_chip *tpm_default_chip(void);
 void tpm2_flush_context(struct tpm_chip *chip, u32 handle);
@@ -548,6 +551,8 @@ int tpm2_start_auth_session(struct tpm_chip *chip);
 void tpm_buf_fill_hmac_session(struct tpm_chip *chip, struct tpm_buf *buf);
 int tpm_buf_check_hmac_response(struct tpm_chip *chip, struct tpm_buf *buf,
 				int rc);
+int tpm_buf_check_hmac_response_debug(struct tpm_chip *chip, struct tpm_buf *buf,
+				       int rc);
 void tpm2_end_auth_session(struct tpm_chip *chip);
 #else
 #include <linux/unaligned.h>
@@ -564,6 +569,12 @@ static inline void tpm_buf_fill_hmac_session(struct tpm_chip *chip,
 {
 }
 static inline int tpm_buf_check_hmac_response(struct tpm_chip *chip,
+					      struct tpm_buf *buf,
+					      int rc)
+{
+	return rc;
+}
+static inline int tpm_buf_check_hmac_response_debug(struct tpm_chip *chip,
 					      struct tpm_buf *buf,
 					      int rc)
 {

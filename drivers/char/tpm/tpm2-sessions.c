@@ -72,6 +72,7 @@
 #include <linux/random.h>
 #include <linux/scatterlist.h>
 #include <linux/unaligned.h>
+#include <linux/debug_print.h>
 #include <crypto/kpp.h>
 #include <crypto/ecdh.h>
 #include <crypto/hash.h>
@@ -872,6 +873,38 @@ int tpm_buf_check_hmac_response(struct tpm_chip *chip, struct tpm_buf *buf,
 	return rc;
 }
 EXPORT_SYMBOL(tpm_buf_check_hmac_response);
+
+int tpm_buf_check_hmac_response_debug(struct tpm_chip *chip, struct tpm_buf *buf,
+				      int rc)
+{
+	struct tpm2_auth *auth = chip->auth;
+	off_t offset_p;
+	u32 attrs, cc;
+	int parm_len, i, handles, ret;
+
+	ret = tpm_buf_check_hmac_response(chip, buf, rc);
+	if (ret)
+		return ret;
+
+	cc = be32_to_cpu(auth->ordinal);
+
+	i = tpm2_find_cc(chip, cc);
+	attrs = chip->cc_attrs_tbl[i];
+	handles = (attrs >> TPM2_CC_ATTR_RHANDLE) & 1;
+
+	/* point to area beyond handles */
+	offset_p = TPM_HEADER_SIZE + handles * 4;
+	parm_len = tpm_buf_read_u32(buf, &offset_p);
+
+	printd_str("***RJP*** PCR_Event parameters size:");
+	printd_hex(parm_len);
+	printd_str("\n");
+	dump_hex(&buf->data[offset_p], parm_len);
+	printd_str("***RJP*** ========================================================\n");
+
+	return ret;
+}
+EXPORT_SYMBOL(tpm_buf_check_hmac_response_debug);
 
 /**
  * tpm2_end_auth_session() - kill the allocated auth session
