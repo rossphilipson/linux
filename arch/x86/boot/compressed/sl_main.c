@@ -26,21 +26,13 @@
 #define SL_TPM_LOG		1
 #define SL_TPM2_LOG		2
 
-#define SL_TPM2_MAX_ALGS	2
-
-#define SL_MAX_EVENT_DATA	64
-#define SL_TPM_LOG_SIZE		(sizeof(struct tcg_pcr_event) + \
-				SL_MAX_EVENT_DATA)
-#define SL_TPM2_LOG_SIZE	(sizeof(struct tcg_pcr_event2_head) + \
-				SHA1_DIGEST_SIZE + SHA256_DIGEST_SIZE + \
-				sizeof(struct tcg_event_field) + \
-				SL_MAX_EVENT_DATA)
-
 static void *evtlog_base;
 static u32 evtlog_size;
 static struct txt_heap_event_log_pointer2_1_element *log21_elem;
 static u32 tpm_log_ver = SL_TPM_LOG;
-static struct tcg_efi_specid_event_algs tpm_algs[SL_TPM2_MAX_ALGS] = {0};
+static u32 tpm_num_algs;
+static struct tcg_efi_specid_event_algs *tpm_algs;
+static u8 event_buf[PAGE_SIZE];
 
 extern u32 sl_cpu_type;
 extern u32 sl_mle_start;
@@ -265,15 +257,22 @@ pmr_check:
 static void sl_find_event_log_algorithms(void)
 {
 	struct tcg_efi_specid_event_head *efi_head =
-		(struct tcg_efi_specid_event_head *)(evtlog_base +
-					log21_elem->first_record_offset +
-					sizeof(struct tcg_pcr_event));
+		(struct tcg_efi_specid_event_head *)(evtlog_base + sizeof(struct tcg_pcr_event));
+	u32 i;
 
-	if (efi_head->num_algs == 0 || efi_head->num_algs > SL_TPM2_MAX_ALGS)
-		sl_txt_reset(SL_ERROR_TPM_NUMBER_ALGS);
+	if (efi_head->num_algs == 0)
+		sl_txt_reset(SL_ERROR_TPM_INVALID_ALGS);
 
-	memcpy(&tpm_algs[0], &efi_head->digest_sizes[0],
-	       sizeof(struct tcg_efi_specid_event_algs) * efi_head->num_algs);
+	tpm_algs = &efi_head->digest_sizes[0];
+	tpm_num_algs = efi_head->num_algs;
+
+	for (i = 0; i < tpm_num_algs; i++) {
+		if (tpm_algs[i].digest_size > TPM_MAX_DIGEST_SIZE)
+			sl_txt_reset(SL_ERROR_TPM_INVALID_ALGS);
+		/* Alg ID 0 is invalid and maps to TPM_ALG_ERROR */
+		if (tpm_algs[i].alg_id == TPM_ALG_ERROR)
+			sl_txt_reset(SL_ERROR_TPM_INVALID_ALGS);
+	}
 }
 
 static void sl_tpm_log_event(u32 pcr, u32 event_type,
@@ -281,11 +280,13 @@ static void sl_tpm_log_event(u32 pcr, u32 event_type,
 			     const u8 *event_data, u32 event_size)
 {
 	u8 sha1_hash[SHA1_DIGEST_SIZE] = {0};
-	u8 log_buf[SL_TPM_LOG_SIZE] = {0};
 	struct tcg_pcr_event *pcr_event;
 	u32 total_size;
 
-	pcr_event = (struct tcg_pcr_event *)log_buf;
+	/* Clear on each use */
+	memset(event_buf, 0, PAGE_SIZE);
+
+	pcr_event = (struct tcg_pcr_event *)event_buf;
 	pcr_event->pcr_idx = pcr;
 	pcr_event->event_type = event_type;
 	if (length > 0) {
@@ -307,25 +308,25 @@ static void sl_tpm2_log_event(u32 pcr, u32 event_type,
 			      const u8 *data, u32 length,
 			      const u8 *event_data, u32 event_size)
 {
-	u8 sha256_hash[SHA256_DIGEST_SIZE] = {0};
-	u8 sha1_hash[SHA1_DIGEST_SIZE] = {0};
-	u8 log_buf[SL_TPM2_LOG_SIZE] = {0};
 	struct sha256_state sctx256 = {0};
 	struct tcg_pcr_event2_head *head;
 	struct tcg_event_field *event;
+	u8 digest[TPM_MAX_DIGEST_SIZE];
 	u32 total_size, alg_idx;
 	u16 *alg_ptr;
 	u8 *dgst_ptr;
 
-	head = (struct tcg_pcr_event2_head *)log_buf;
+	/* Clear on each use */
+	memset(event_buf, 0, PAGE_SIZE);
+
+	head = (struct tcg_pcr_event2_head *)event_buf;
 	head->pcr_idx = pcr;
 	head->event_type = event_type;
 	total_size = sizeof(*head);
-	alg_ptr = (u16 *)(log_buf + sizeof(*head));
+	alg_ptr = (u16 *)(event_buf + sizeof(*head));
 
-	for (alg_idx = 0; alg_idx < SL_TPM2_MAX_ALGS; alg_idx++) {
-		if (!tpm_algs[alg_idx].alg_id)
-			break;
+	for (alg_idx = 0; alg_idx < tpm_num_algs; alg_idx++) {
+		memset(digest, 0, TPM_MAX_DIGEST_SIZE);
 
 		*alg_ptr = tpm_algs[alg_idx].alg_id;
 		dgst_ptr = (u8 *)alg_ptr + sizeof(u16);
@@ -333,29 +334,32 @@ static void sl_tpm2_log_event(u32 pcr, u32 event_type,
 		if (tpm_algs[alg_idx].alg_id == TPM_ALG_SHA256) {
 			sha256_init(&sctx256);
 			sha256_update(&sctx256, data, length);
-			sha256_final(&sctx256, &sha256_hash[0]);
-			memcpy(dgst_ptr, &sha256_hash[0], SHA256_DIGEST_SIZE);
-			total_size += SHA256_DIGEST_SIZE + sizeof(u16);
-			alg_ptr = (u16 *)((u8 *)alg_ptr + SHA256_DIGEST_SIZE + sizeof(u16));
+			sha256_final(&sctx256, &digest[0]);
 		} else if (tpm_algs[alg_idx].alg_id == TPM_ALG_SHA1) {
-			sha1(data, length, &sha1_hash[0]);
-			memcpy(dgst_ptr, &sha1_hash[0], SHA1_DIGEST_SIZE);
-			total_size += SHA1_DIGEST_SIZE + sizeof(u16);
-			alg_ptr = (u16 *)((u8 *)alg_ptr + SHA1_DIGEST_SIZE + sizeof(u16));
+			sha1(data, length, &digest[0]);
 		} else {
-			sl_txt_reset(SL_ERROR_TPM_UNKNOWN_DIGEST);
+			/*
+			 * If there are TPM banks in use that are not supported
+			 * in software here, the PCR in that bank will be capped with
+			 * the well-known value 1 as the Intel ACM does.
+			 */
+			digest[0] = 0x01;
 		}
+
+		memcpy(dgst_ptr, &digest[0], tpm_algs[alg_idx].digest_size);
+		total_size += tpm_algs[alg_idx].digest_size + sizeof(u16);
+		alg_ptr = (u16 *)((u8 *)alg_ptr + tpm_algs[alg_idx].digest_size + sizeof(u16));
 
 		head->count++;
 	}
 
-	event = (struct tcg_event_field *)(log_buf + total_size);
+	event = (struct tcg_event_field *)(event_buf + total_size);
 	event->event_size = event_size;
 	if (event_size > 0)
 		memcpy((u8 *)event + sizeof(*event), event_data, event_size);
 	total_size += sizeof(*event) + event_size;
 
-	if (tpm2_log_event(log21_elem, evtlog_base, evtlog_size, total_size, &log_buf[0]))
+	if (tpm2_log_event(log21_elem, evtlog_base, evtlog_size, total_size, &event_buf[0]))
 		sl_txt_reset(SL_ERROR_TPM_LOGGING_FAILED);
 }
 
