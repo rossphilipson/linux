@@ -511,24 +511,25 @@ The underlying issue is memremap() failure, most likely due to a resource
 shortage.
 
 ======  ========================
-Name:   SL_ERROR_TPM_NUMBER_ALGS
+Name:   SL_ERROR_TPM_INVALID_ALGS
 Value:  0xc000801f
 ======  ========================
 
 Description:
 
-The TPM 2.0 event log reports an unsupported number of hashing algorithms.
-Secure launch currently only supports a maximum of two: SHA1 and SHA256.
+The TPM 2.0 event log reports either no hashing algorithms, invalid algorithm ID
+or an algorithm size larger than the max size recognized by the TPM support code.
 
 ======  ===========================
-Name:   SL_ERROR_TPM_UNKNOWN_DIGEST
+Name:   SL_ERROR_TPM_EVENT_COUNT
 Value:  0xc0008020
 ======  ===========================
 
 Description:
 
-The TPM 2.0 event log reports an unsupported hashing algorithm. Secure launch
-currently only supports two algorithms: SHA1 and SHA256.
+The TPM 2.0 event log contains an event with a digest count that is not equal
+to the algorithm count of the overall log. This is an invalid configuration
+that could indicate either a bug or a possible attack.
 
 ======  ==========================
 Name:   SL_ERROR_TPM_INVALID_EVENT
