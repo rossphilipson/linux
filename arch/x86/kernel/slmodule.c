@@ -85,6 +85,7 @@ static struct memfile sl_evtlog = {"eventlog", NULL, 0};
 static void *txt_heap;
 static struct txt_heap_event_log_pointer2_1_element *evtlog21;
 static DEFINE_MUTEX(sl_evt_log_mutex);
+static struct tcg_efi_specid_event_head *efi_head;
 
 static ssize_t sl_evtlog_read(struct file *file, char __user *buf,
 			      size_t count, loff_t *pos)
@@ -306,6 +307,9 @@ static void slaunch_intel_evtlog(void __iomem *txt)
 	if (!evtlog21)
 		slaunch_txt_reset(txt, "Error failed to find TPM20 event log element\n",
 				  SL_ERROR_TPM_INVALID_LOG20);
+
+	/* Save pointer to the EFI SpecID log header */
+	efi_head = (struct tcg_efi_specid_event_head *)(sl_evtlog.addr + sizeof(struct tcg_pcr_event));
 }
 
 static void slaunch_tpm2_extend_event(struct tpm_chip *tpm, void __iomem *txt,
@@ -314,50 +318,32 @@ static void slaunch_tpm2_extend_event(struct tpm_chip *tpm, void __iomem *txt,
 	u16 *alg_id_field = (u16 *)((u8 *)event + sizeof(*event));
 	struct tpm_digest *digests;
 	u8 *dptr;
-	u32 i, j;
 	int ret;
+	u32 i;
 
-	digests = kcalloc(tpm->nr_allocated_banks, sizeof(*digests),
-			  GFP_KERNEL);
+	/*
+	 * Early SL code ensured the TPM algorithm information passed via
+	 * the log is valid. Small sanity check here.
+	 */
+	if (event->count != efi_head->num_algs)
+		slaunch_txt_reset(txt, "Event digest count mismatch with event log\n",
+				  SL_ERROR_TPM_EVENT_COUNT);
+
+	digests = kzalloc(efi_head->num_algs * sizeof(*digests), GFP_KERNEL);
 	if (!digests)
 		slaunch_txt_reset(txt, "Failed to allocate array of digests\n",
 				  SL_ERROR_GENERIC);
 
-	for (i = 0; i < tpm->nr_allocated_banks; i++)
-		digests[i].alg_id = tpm->allocated_banks[i].alg_id;
-
-	/* Early SL code ensured there was a max count of 2 digests */
 	for (i = 0; i < event->count; i++) {
 		dptr = (u8 *)alg_id_field + sizeof(u16);
 
-		for (j = 0; j < tpm->nr_allocated_banks; j++) {
-			if (digests[j].alg_id != *alg_id_field)
-				continue;
+		/* Setup each digest for the extend */
+		digests[i].alg_id = efi_head->digest_sizes[i].alg_id;
+		memcpy(&digests[i].digest[0], dptr,
+			efi_head->digest_sizes[i].digest_size);
 
-			switch (digests[j].alg_id) {
-			case TPM_ALG_SHA256:
-				memcpy(&digests[j].digest[0], dptr,
-				       SHA256_DIGEST_SIZE);
-				break;
-			case TPM_ALG_SHA1:
-				memcpy(&digests[j].digest[0], dptr,
-				       SHA1_DIGEST_SIZE);
-				break;
-			default:
-				break;
-			}
-		}
-
-		switch (*alg_id_field) {
-		case TPM_ALG_SHA256:
-			alg_id_field = (u16 *)((u8 *)alg_id_field +
-				sizeof(u16) + SHA256_DIGEST_SIZE);
-			break;
-		case TPM_ALG_SHA1:
-			alg_id_field = (u16 *)((u8 *)alg_id_field +
-				sizeof(u16) + SHA1_DIGEST_SIZE);
-			break;
-		}
+		alg_id_field = (u16 *)((u8 *)alg_id_field + sizeof(u16) +
+				efi_head->digest_sizes[i].digest_size);
 	}
 
 	ret = tpm_pcr_extend(tpm, event->pcr_idx, digests);
