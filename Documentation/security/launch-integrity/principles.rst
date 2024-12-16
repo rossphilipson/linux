@@ -1,5 +1,5 @@
 .. SPDX-License-Identifier: GPL-2.0
-.. Copyright © 2019-2024 Daniel P. Smith <dpsmith@apertussolutions.com>
+.. Copyright (c) 2019-2024 Daniel P. Smith <dpsmith@apertussolutions.com>
 
 =======================
 System Launch Integrity
@@ -63,7 +63,7 @@ late launch.
    launch chain to the final Operating System.
 
 :Late Launch: The usage of a dynamic launch by an executing Operating System to
-   transition to a “known good” state to perform one or more operations, e.g. to
+   transition to a "known good" state to perform one or more operations, e.g. to
    launch into a new Operating System.
 
 System Integrity
