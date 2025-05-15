@@ -110,6 +110,8 @@ vmlinux-libs-$(CONFIG_EFI_STUB) += $(objtree)/drivers/firmware/efi/libstub/lib.a
 
 vmlinux-objs-y += $(obj)/sl_main.o
 
+vmlinux-objs-y += $(obj)/early_tpm_extend.o
+
 $(obj)/vmlinux: $(vmlinux-objs-y) $(vmlinux-libs-y) FORCE
 	$(call if_changed,ld)
 
