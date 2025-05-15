@@ -462,6 +462,9 @@ SYM_FUNC_START_LOCAL_NOALIGN(.Lrelocated)
 	shrq	$3, %rcx
 	rep	stosq
 
+	movq	%r15, %rdi
+	callq	sl_main
+
 	call	load_stage2_idt
 
 	/* Pass boot_params to initialize_identity_maps() */
