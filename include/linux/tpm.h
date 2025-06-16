@@ -25,6 +25,9 @@
 #include <crypto/hash_info.h>
 #include <crypto/aes.h>
 
+#include "tpm_common.h"
+#include "tpm1.h"
+
 #define TPM_DIGEST_SIZE 20	/* Max TPM v1.2 PCR size */
 #define TPM_MAX_DIGEST_SIZE SHA512_DIGEST_SIZE
 
