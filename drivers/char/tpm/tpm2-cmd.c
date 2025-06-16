@@ -94,17 +94,6 @@ unsigned long tpm2_calc_ordinal_duration(u32 ordinal)
 	return msecs_to_jiffies(TPM2_DURATION_DEFAULT);
 }
 
-struct tpm2_pcr_read_out {
-	__be32	update_cnt;
-	__be32	pcr_selects_cnt;
-	__be16	hash_alg;
-	u8	pcr_select_size;
-	u8	pcr_select[TPM2_PCR_SELECT_MIN];
-	__be32	digests_cnt;
-	__be16	digest_size;
-	u8	digest[];
-} __packed;
-
 /**
  * tpm2_pcr_read() - read a PCR value
  * @chip:	TPM chip to use.
@@ -254,14 +243,6 @@ void tpm2_flush_context(struct tpm_chip *chip, u32 handle)
 	tpm_transmit_cmd(chip, buf, 0, "TPM2_FlushContext");
 }
 EXPORT_SYMBOL_GPL(tpm2_flush_context);
-
-struct tpm2_get_cap_out {
-	u8 more_data;
-	__be32 subcap_id;
-	__be32 property_cnt;
-	__be32 property_id;
-	__be32 value;
-} __packed;
 
 /**
  * tpm2_get_tpm_pt() - get value of a TPM_CAP_TPM_PROPERTIES type property
@@ -428,12 +409,6 @@ static int tpm2_init_bank_info(struct tpm_chip *chip, u32 bank_index)
 
 	return tpm2_pcr_read(chip, 0, &digest, &bank->digest_size);
 }
-
-struct tpm2_pcr_selection {
-	__be16  hash_alg;
-	u8  size_of_select;
-	u8  pcr_select[3];
-} __packed;
 
 ssize_t tpm2_get_pcr_allocation(struct tpm_chip *chip)
 {
