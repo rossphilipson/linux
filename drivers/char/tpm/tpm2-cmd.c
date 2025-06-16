@@ -11,8 +11,8 @@
  * used by the kernel internally.
  */
 
-#include "tpm.h"
 #include <crypto/hash_info.h>
+#include "tpm.h"
 
 static bool disable_pcr_integrity;
 module_param(disable_pcr_integrity, bool, 0444);
@@ -142,17 +142,6 @@ unsigned long tpm2_calc_ordinal_duration(struct tpm_chip *chip, u32 ordinal)
 }
 
 
-struct tpm2_pcr_read_out {
-	__be32	update_cnt;
-	__be32	pcr_selects_cnt;
-	__be16	hash_alg;
-	u8	pcr_select_size;
-	u8	pcr_select[TPM2_PCR_SELECT_MIN];
-	__be32	digests_cnt;
-	__be16	digest_size;
-	u8	digest[];
-} __packed;
-
 /**
  * tpm2_pcr_read() - read a PCR value
  * @chip:	TPM chip to use.
@@ -276,11 +265,6 @@ int tpm2_pcr_extend(struct tpm_chip *chip, u32 pcr_idx,
 	return rc;
 }
 
-struct tpm2_get_random_out {
-	__be16 size;
-	u8 buffer[TPM_MAX_RNG_DATA];
-} __packed;
-
 /**
  * tpm2_get_random() - get random bytes from the TPM RNG
  *
@@ -390,14 +374,6 @@ void tpm2_flush_context(struct tpm_chip *chip, u32 handle)
 	tpm_buf_destroy(&buf);
 }
 EXPORT_SYMBOL_GPL(tpm2_flush_context);
-
-struct tpm2_get_cap_out {
-	u8 more_data;
-	__be32 subcap_id;
-	__be32 property_cnt;
-	__be32 property_id;
-	__be32 value;
-} __packed;
 
 /**
  * tpm2_get_tpm_pt() - get value of a TPM_CAP_TPM_PROPERTIES type property
@@ -565,12 +541,6 @@ static int tpm2_init_bank_info(struct tpm_chip *chip, u32 bank_index)
 
 	return tpm2_pcr_read(chip, 0, &digest, &bank->digest_size);
 }
-
-struct tpm2_pcr_selection {
-	__be16  hash_alg;
-	u8  size_of_select;
-	u8  pcr_select[3];
-} __packed;
 
 ssize_t tpm2_get_pcr_allocation(struct tpm_chip *chip)
 {
