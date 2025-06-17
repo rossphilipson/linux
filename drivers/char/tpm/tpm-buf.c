@@ -3,8 +3,26 @@
  * Handling of TPM command and other buffers.
  */
 
+#include <linux/types.h>
 #include <linux/module.h>
-#include <linux/tpm.h>
+#include <crypto/sha2.h>
+#include <linux/tpm_common.h>
+#include <linux/tpm1.h>
+#include <linux/tpm2.h>
+#include <linux/tpm_buf.h>
+
+/* Default TPM buffer allocator, user can override */
+#ifndef TPM_BUF_PROVIDE_ALLOCATOR
+static inline u8 *tpm_buf_alloc_page(void)
+{
+	return (u8 *)__get_free_page(GFP_KERNEL);
+}
+
+static inline void tpm_buf_free_page(unsigned long p)
+{
+	free_page(p);
+}
+#endif
 
 /**
  * tpm_buf_init() - Allocate and initialize a TPM command
@@ -16,7 +34,7 @@
  */
 int tpm_buf_init(struct tpm_buf *buf, u16 tag, u32 ordinal)
 {
-	buf->data = (u8 *)__get_free_page(GFP_KERNEL);
+	buf->data = tpm_buf_alloc_page();
 	if (!buf->data)
 		return -ENOMEM;
 
@@ -35,9 +53,6 @@ void tpm_buf_reset(struct tpm_buf *buf, u16 tag, u32 ordinal)
 {
 	struct tpm_header *head = (struct tpm_header *)buf->data;
 
-	WARN_ON(tag != TPM_TAG_RQU_COMMAND && tag != TPM2_ST_NO_SESSIONS &&
-		tag != TPM2_ST_SESSIONS && tag != 0);
-
 	buf->flags = 0;
 	buf->length = sizeof(*head);
 	head->tag = cpu_to_be16(tag);
@@ -55,7 +70,7 @@ EXPORT_SYMBOL_GPL(tpm_buf_reset);
  */
 int tpm_buf_init_sized(struct tpm_buf *buf)
 {
-	buf->data = (u8 *)__get_free_page(GFP_KERNEL);
+	buf->data = tpm_buf_alloc_page();
 	if (!buf->data)
 		return -ENOMEM;
 
@@ -79,7 +94,7 @@ EXPORT_SYMBOL_GPL(tpm_buf_reset_sized);
 
 void tpm_buf_destroy(struct tpm_buf *buf)
 {
-	free_page((unsigned long)buf->data);
+	tpm_buf_free_page((unsigned long)buf->data);
 }
 EXPORT_SYMBOL_GPL(tpm_buf_destroy);
 
@@ -108,7 +123,6 @@ void tpm_buf_append(struct tpm_buf *buf, const u8 *new_data, u16 new_length)
 		return;
 
 	if ((buf->length + new_length) > PAGE_SIZE) {
-		WARN(1, "tpm_buf: write overflow\n");
 		buf->flags |= TPM_BUF_OVERFLOW;
 		return;
 	}
@@ -147,22 +161,24 @@ EXPORT_SYMBOL_GPL(tpm_buf_append_u32);
 
 /**
  * tpm_buf_append_handle() - Add a handle
- * @chip:	&tpm_chip instance
  * @buf:	&tpm_buf instance
  * @handle:	a TPM object handle
  *
  * Add a handle to the buffer, and increase the count tracking the number of
  * handles in the command buffer. Works only for command buffers.
+ *
+ * Return: true on success, false if input buffer type is incorrect.
  */
-void tpm_buf_append_handle(struct tpm_chip *chip, struct tpm_buf *buf, u32 handle)
+bool tpm_buf_append_handle(struct tpm_buf *buf, u32 handle)
 {
-	if (buf->flags & TPM_BUF_TPM2B) {
-		dev_err(&chip->dev, "Invalid buffer type (TPM2B)\n");
-		return;
-	}
+	/* Invalid buffer type (TPM2B) */
+	if (buf->flags & TPM_BUF_TPM2B)
+		return false;
 
 	tpm_buf_append_u32(buf, handle);
 	buf->handles++;
+
+	return true;
 }
 
 /**
@@ -182,7 +198,6 @@ static void tpm_buf_read(struct tpm_buf *buf, off_t *offset, size_t count, void 
 
 	next_offset = *offset + count;
 	if (next_offset > buf->length) {
-		WARN(1, "tpm_buf: read out of boundary\n");
 		buf->flags |= TPM_BUF_BOUNDARY_ERROR;
 		return;
 	}
@@ -241,5 +256,3 @@ u32 tpm_buf_read_u32(struct tpm_buf *buf, off_t *offset)
 	return be32_to_cpu(value);
 }
 EXPORT_SYMBOL_GPL(tpm_buf_read_u32);
-
-
