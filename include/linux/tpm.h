@@ -29,67 +29,11 @@
 #include "tpm1.h"
 #include "tpm2.h"
 
-#define TPM_DIGEST_SIZE		20	/* Max TPM v1.2 PCR size */
-#define TPM_BUFSIZE		4096
-
-/*
- * SHA-512 is, as of today, the largest digest in the TCG algorithm repository.
- */
-#define TPM2_MAX_DIGEST_SIZE	SHA512_DIGEST_SIZE
-
-/*
- * A TPM name digest i.e., TPMT_HA, is a concatenation of TPM_ALG_ID of the
- * name algorithm and hash of TPMT_PUBLIC.
- */
-#define TPM2_MAX_NAME_SIZE	(TPM2_MAX_DIGEST_SIZE + 2)
-
-/*
- * The maximum number of PCR banks.
- */
-#define TPM2_MAX_PCR_BANKS	8
-
-/*
- * fixed define for the size of a name.  This is actually HASHALG size
- * plus 2, so 32 for SHA256
- */
-#define TPM2_NULL_NAME_SIZE	34
-
-/*
- * The maximum size for an object context
- */
-#define TPM2_MAX_CONTEXT_SIZE	4096
-
 struct tpm_chip;
 struct trusted_key_payload;
 struct trusted_key_options;
 /* opaque structure, holds auth session parameters like the session key */
 struct tpm2_auth;
-
-/* if you add a new hash to this, increment TPM_MAX_HASHES below */
-enum tpm_algorithms {
-	TPM_ALG_ERROR		= 0x0000,
-	TPM_ALG_SHA1		= 0x0004,
-	TPM_ALG_AES		= 0x0006,
-	TPM_ALG_KEYEDHASH	= 0x0008,
-	TPM_ALG_SHA256		= 0x000B,
-	TPM_ALG_SHA384		= 0x000C,
-	TPM_ALG_SHA512		= 0x000D,
-	TPM_ALG_NULL		= 0x0010,
-	TPM_ALG_SM3_256		= 0x0012,
-	TPM_ALG_ECC		= 0x0023,
-	TPM_ALG_CFB		= 0x0043,
-};
-
-/*
- * maximum number of hashing algorithms a TPM can have.  This is
- * basically a count of every hash in tpm_algorithms above
- */
-#define TPM_MAX_HASHES	5
-
-struct tpm_digest {
-	u16 alg_id;
-	u8 digest[TPM2_MAX_DIGEST_SIZE];
-} __packed;
 
 struct tpm_bank_info {
 	u16 alg_id;
@@ -154,8 +98,19 @@ struct tpm_chip_seqops {
 	const struct seq_operations *seqops;
 };
 
-/* fixed define for the curve we use which is NIST_P256 */
-#define EC_PT_SZ	32
+/* Fixed define for the curve we use which is NIST_P256 */
+#define EC_PT_SZ		32
+
+/*
+ * The maximum size for an object context
+ */
+#define TPM2_MAX_CONTEXT_SIZE	4096
+
+/*
+ * The maximum locality (0 - 4) for a TPM, as defined in section 3.2 of the
+ * Client Platform Profile Specification.
+ */
+#define TPM_MAX_LOCALITY	4
 
 struct tpm_chip {
 	struct device dev;
@@ -254,15 +209,6 @@ enum tpm_chip_flags {
 };
 
 #define to_tpm_chip(d) container_of(d, struct tpm_chip, dev)
-
-struct tpm_header {
-	__be16 tag;
-	__be32 length;
-	union {
-		__be32 ordinal;
-		__be32 return_code;
-	};
-} __packed;
 
 enum tpm_buf_flags {
 	/* TPM2B format: */
