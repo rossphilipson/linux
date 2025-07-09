@@ -35,7 +35,7 @@ int tpm_tis_request_locality(struct tpm_chip *chip, int l);
 int tpm1_pcr_extend(struct tpm_chip *chip, u32 pcr_idx, const u8 *hash);
 int tpm2_pcr_extend(struct tpm_chip *chip, u32 pcr_idx,
 		    struct tpm_digest *digests, u32 digest_count);
-int early_tpm_init(struct tpm_chip *chip, u64 baseaddr, int locality);
+int early_tpm_init(struct tpm_chip *chip, u64 baseaddr);
 int early_tpm_fini(struct tpm_chip *chip);
 
 #endif /* BOOT_COMPRESSED_TPM_H */

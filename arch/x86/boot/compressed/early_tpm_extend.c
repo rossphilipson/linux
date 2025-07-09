@@ -95,7 +95,7 @@ static inline u8 tpm_read8(struct tpm_chip *chip, u32 field)
 	return readb(mmio_addr);
 }
 
-static inline void tpm_write8(struct tpm_chip *chip, u8 val, u32 field)
+static inline void tpm_write8(struct tpm_chip *chip, u32 field, u8 val)
 {
 	void *mmio_addr = (void *)(uintptr_t)(chip->baseaddr | field);
 	writeb(val, mmio_addr);
@@ -107,7 +107,7 @@ static inline u32 tpm_read32(struct tpm_chip *chip, u32 field)
 	return readl(mmio_addr);
 }
 
-static inline void tpm_write32(struct tpm_chip *chip, u8 val, u32 field)
+static inline void tpm_write32(struct tpm_chip *chip, u32 field, u32 val)
 {
 	void *mmio_addr = (void *)(uintptr_t)(chip->baseaddr | field);
 	writel(val, mmio_addr);
@@ -187,8 +187,10 @@ static int __tis_recv_data(struct tpm_chip *chip, u8 *buf, int count)
  */
 bool tpm_tis_check_locality(struct tpm_chip *chip, int l)
 {
-	if (tpm_read8(chip, TPM_ACCESS(l)) & (TPM_ACCESS_ACTIVE_LOCALITY | TPM_ACCESS_VALID) == (TPM_ACCESS_ACTIVE_LOCALITY | TPM_ACCESS_VALID))
+	if ((tpm_read8(chip, TPM_ACCESS(l)) & (TPM_ACCESS_ACTIVE_LOCALITY | TPM_ACCESS_VALID)) == (TPM_ACCESS_ACTIVE_LOCALITY | TPM_ACCESS_VALID)) {
+		chip->locality = l;
 		return true;
+	}
 
 	return false;
 }
@@ -199,8 +201,8 @@ bool tpm_tis_check_locality(struct tpm_chip *chip, int l)
  */
 void tpm_tis_release_locality(struct tpm_chip *chip)
 {
-	if (tpm_read8(chip, TPM_ACCESS(chip->locality)) & (TPM_ACCESS_REQUEST_PENDING | TPM_ACCESS_VALID) == (TPM_ACCESS_REQUEST_PENDING | TPM_ACCESS_VALID))
-		tpm_write8(chip, TPM_ACCESS_RELINQUISH_LOCALITY, TPM_ACCESS(chip->locality));
+	if ((tpm_read8(chip, TPM_ACCESS(chip->locality)) & (TPM_ACCESS_REQUEST_PENDING | TPM_ACCESS_VALID)) == (TPM_ACCESS_REQUEST_PENDING | TPM_ACCESS_VALID))
+		tpm_write8(chip, TPM_ACCESS(chip->locality), TPM_ACCESS_RELINQUISH_LOCALITY);
 
 	chip->locality = 0;
 }
@@ -219,7 +221,7 @@ int tpm_tis_request_locality(struct tpm_chip *chip, int l)
 	ktime_t stop;
 
 	if (tpm_tis_check_locality(chip, l))
-		return (chip->locality = l);
+		return l;
 
 	/* Set the new locality */
 	tpm_write8(chip, TPM_ACCESS(l), TPM_ACCESS_REQUEST_USE);
@@ -227,7 +229,7 @@ int tpm_tis_request_locality(struct tpm_chip *chip, int l)
 	stop = early_now_ms() + chip->timeout_b;
 	do {
 		if (tpm_tis_check_locality(chip, l))
-			return (chip->locality = l);
+			return l;
 
 		early_mdelay(TPM_TIMEOUT);
 	} while (early_now_ms() < stop);
@@ -393,7 +395,7 @@ static int tpm_tis_transmit(struct tpm_chip *chip, u8 *buf, u32 bufsize)
 out_recv:
 	rc = tpm_tis_recv(chip, buf, bufsize);
 	if (rc >= 0) {
-		if (rc > 0 && rc < (bufsize + TPM_HEADER_SIZE))
+		if (rc > 0 && rc < TPM_HEADER_SIZE)
 			return -EFAULT;
 		return rc;
 	}
@@ -520,7 +522,7 @@ int tpm2_pcr_extend(struct tpm_chip *chip, u32 pcr_idx,
 	return rc;
 }
 
-int early_tpm_init(struct tpm_chip *chip, u64 baseaddr, int locality)
+int early_tpm_init(struct tpm_chip *chip, u64 baseaddr)
 {
 	u32 didvid, intmask;
 
@@ -536,15 +538,6 @@ int early_tpm_init(struct tpm_chip *chip, u64 baseaddr, int locality)
 	chip->timeout_b = TIS_LONG_TIMEOUT;
 	chip->timeout_c = TIS_SHORT_TIMEOUT;
 	chip->timeout_d = TIS_SHORT_TIMEOUT;
-
-	/* Interupt register setup */
-	intmask = tpm_read32(chip, TPM_INT_ENABLE(locality));
-	intmask |= TPM_INTF_CMD_READY_INT | TPM_INTF_LOCALITY_CHANGE_INT | TPM_INTF_DATA_AVAIL_INT | TPM_INTF_STS_VALID_INT;
-	tpm_write32(chip, TPM_INT_ENABLE(locality), intmask);
-
-	/* Make requested locality active */
-	if (tpm_tis_request_locality(chip, locality) < 0)
-		return TPM_ERR_FAIL;
 
 	/* Get the vendor and device ids */
 	didvid = tpm_read32(chip, TPM_DID_VID(chip->locality));

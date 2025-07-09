@@ -562,6 +562,7 @@ asmlinkage __visible void sl_main(void *bootparams)
 	if (!(sl_cpu_type & SL_CPU_INTEL))
 		return;
 
+	/* Find the SLRT setup by the pre-launch stage */
 	slrt = sl_locate_and_validate_slrt();
 
 	/* Locate the TPM event log. */
@@ -580,8 +581,15 @@ asmlinkage __visible void sl_main(void *bootparams)
 	/* Calibrate an early x86 timer for the TPM to use */
 	pit_calibrate();
 
-	/* Initialize early TPM driver to do extends */
-	if (early_tpm_init(&chip, TIS_MEM_X86_LPC_BASE, 2))
+	/*
+	 * Prepare the early TPM driver to do PCR extends for the DRTM
+	 * measurements. On a successful DRTM launch, TPM locality 2
+	 * should be acquired and active for use. If this is not the
+	 * case, the launch failed or there is a HW issue.
+	 */
+	if (early_tpm_init(&chip, TIS_MEM_X86_LPC_BASE))
+		sl_txt_reset(SL_ERROR_TPM_INIT);
+	if (tpm_tis_request_locality(&chip, TPM_LOCALITY_2) < 0)
 		sl_txt_reset(SL_ERROR_TPM_INIT);
 	if (chip.family == TPM_FAMILY_20 && tpm_log_ver != SL_TPM2_LOG)
 		sl_txt_reset(SL_ERROR_TPM_INIT);
