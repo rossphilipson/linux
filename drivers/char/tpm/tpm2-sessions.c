@@ -251,7 +251,9 @@ EXPORT_SYMBOL_GPL(tpm2_read_public);
 int tpm_buf_append_name(struct tpm_chip *chip, struct tpm_buf *buf,
 			u32 handle, u8 *name, u16 name_size)
 {
+#ifdef CONFIG_TCG_TPM2_HMAC
 	struct tpm2_auth *auth;
+#endif
 	int ret;
 
 	if (tpm_buf_length(buf) != TPM_HEADER_SIZE) {
