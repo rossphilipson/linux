@@ -487,18 +487,24 @@ int tpm_pm_resume(struct device *dev)
 EXPORT_SYMBOL_GPL(tpm_pm_resume);
 
 /**
- * tpm_get_random() - get random bytes from the TPM's RNG
- * @chip:	a &struct tpm_chip instance, %NULL for the default chip
- * @out:	destination buffer for the random bytes
- * @max:	the max number of bytes to write to @out
+ * tpm_get_random() - Get random bytes from the TPM's RNG
+ * @chip:	A &tpm_chip instance. When set to %NULL, the default chip is used.
+ * @out:	Destination buffer for the acquired random bytes.
+ * @max:	The maximum number of bytes to write to @out.
  *
- * Return: number of random bytes read or a negative error value.
+ * Tries to pull bytes from the TPM. At most, @max bytes are returned.
+ *
+ * Returns the number of random bytes read on success.
+ * Returns -EINVAL when @out is NULL, or @max is not between zero and
+ * %TPM_MAX_RNG_DATA.
+ * Returns tpm_transmit_cmd() error codes when the TPM command results an
+ * error.
  */
 int tpm_get_random(struct tpm_chip *chip, u8 *out, size_t max)
 {
 	int rc;
 
-	if (!out || max > TPM_MAX_RNG_DATA)
+	if (!out || !max || max > TPM_MAX_RNG_DATA)
 		return -EINVAL;
 
 	if (!chip)
@@ -514,7 +520,7 @@ int tpm_get_random(struct tpm_chip *chip, u8 *out, size_t max)
 		rc = tpm1_get_random(chip, out, max);
 
 	tpm_put_ops(chip);
-	return rc;
+	return rc != 0 ? rc : -EIO;
 }
 EXPORT_SYMBOL_GPL(tpm_get_random);
 
