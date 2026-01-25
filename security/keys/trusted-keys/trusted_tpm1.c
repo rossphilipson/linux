@@ -371,12 +371,9 @@ static int osap(struct tpm_buf *tb, struct osapsess *s,
 	unsigned char ononce[TPM_NONCE_SIZE];
 	int ret;
 
-	ret = tpm_get_random(chip, ononce, TPM_NONCE_SIZE);
+	ret = get_random_bytes_wait(ononce, TPM_NONCE_SIZE);
 	if (ret < 0)
 		return ret;
-
-	if (ret != TPM_NONCE_SIZE)
-		return -EIO;
 
 	tpm_buf_reset(tb, TPM_TAG_RQU_COMMAND, TPM_ORD_OSAP);
 	tpm_buf_append_u16(tb, type);
@@ -464,14 +461,9 @@ static int tpm_seal(struct tpm_buf *tb, uint16_t keytype,
 	memcpy(td->xorwork + SHA1_DIGEST_SIZE, sess.enonce, SHA1_DIGEST_SIZE);
 	sha1(td->xorwork, SHA1_DIGEST_SIZE * 2, td->xorhash);
 
-	ret = tpm_get_random(chip, td->nonceodd, TPM_NONCE_SIZE);
+	ret = get_random_bytes_wait(td->nonceodd, TPM_NONCE_SIZE);
 	if (ret < 0)
 		goto out;
-
-	if (ret != TPM_NONCE_SIZE) {
-		ret = -EIO;
-		goto out;
-	}
 
 	ordinal = htonl(TPM_ORD_SEAL);
 	datsize = htonl(datalen);
@@ -575,14 +567,10 @@ static int tpm_unseal(struct tpm_buf *tb,
 	}
 
 	ordinal = htonl(TPM_ORD_UNSEAL);
-	ret = tpm_get_random(chip, nonceodd, TPM_NONCE_SIZE);
+	ret = get_random_bytes_wait(nonceodd, TPM_NONCE_SIZE);
 	if (ret < 0)
 		return ret;
 
-	if (ret != TPM_NONCE_SIZE) {
-		pr_info("tpm_get_random failed (%d)\n", ret);
-		return -EIO;
-	}
 	ret = TSS_authhmac(authdata1, keyauth, TPM_NONCE_SIZE,
 			   enonce1, nonceodd, cont, sizeof(uint32_t),
 			   &ordinal, bloblen, blob, 0, 0);
