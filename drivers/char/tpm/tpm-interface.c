@@ -485,11 +485,6 @@ int tpm_pm_resume(struct device *dev)
 }
 EXPORT_SYMBOL_GPL(tpm_pm_resume);
 
-struct tpm1_get_random_out {
-	__be32 rng_data_len;
-	u8 rng_data[TPM_MAX_RNG_DATA];
-} __packed;
-
 static int tpm1_get_random(struct tpm_chip *chip, u8 *out, size_t max)
 {
 	struct tpm1_get_random_out *resp;
