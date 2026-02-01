@@ -26,7 +26,6 @@
 #include <linux/suspend.h>
 #include <linux/freezer.h>
 #include <linux/tpm_eventlog.h>
-#include <linux/tpm_command.h>
 #include "tpm.h"
 
 /*
@@ -505,7 +504,7 @@ static int tpm1_get_random(struct tpm_chip *chip, u8 *out, size_t max)
 		return -ENOMEM;
 
 	tpm_buf_init(buf, TPM_BUFSIZE);
-	tpm_buf_reset(buf, TPM_TAG_RQU_COMMAND, TPM_ORD_GETRANDOM);
+	tpm_buf_reset(buf, TPM_TAG_RQU_COMMAND, TPM_ORD_GET_RANDOM);
 	tpm_buf_append_u32(buf, max);
 
 	rc = tpm_transmit_cmd(chip, buf, sizeof(resp->rng_data_len), "TPM_GetRandom");
