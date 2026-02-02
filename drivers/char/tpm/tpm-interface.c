@@ -522,11 +522,6 @@ static int tpm1_get_random(struct tpm_chip *chip, u8 *out, size_t max)
 	return recd;
 }
 
-struct tpm2_get_random_out {
-	__be16 size;
-	u8 buffer[TPM_MAX_RNG_DATA];
-} __packed;
-
 static int tpm2_get_random(struct tpm_chip *chip, u8 *out, size_t max)
 {
 	struct tpm2_get_random_out *resp;
