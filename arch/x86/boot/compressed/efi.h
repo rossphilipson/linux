@@ -21,6 +21,16 @@ typedef guid_t efi_guid_t __aligned(__alignof__(u32));
 #define EFI32_LOADER_SIGNATURE	"EL32"
 #define EFI64_LOADER_SIGNATURE	"EL64"
 
+#if defined(CONFIG_X86_64)
+#define __efiapi __attribute__((ms_abi))
+#elif defined(CONFIG_X86_32)
+#define __efiapi __attribute__((regparm(0)))
+#else
+#define __efiapi
+#endif
+
+typedef unsigned long efi_status_t;
+
 /*
  * Generic EFI table header
  */
